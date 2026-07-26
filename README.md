@@ -57,6 +57,51 @@ Expected output of step 1: 77 patients, 150 pairs (77 near / 73 distant), 300 im
 | Same-view WLI–NBI pairs | 150 |
 | Gradeable resections | 48 (21 low grade / 27 high grade or above) |
 
+## Running the experiments
+
+Both stages train on Colab (`notebooks/colab_train.ipynb` is a thin driver over these
+scripts); both read-outs run anywhere, from the committed CSVs, with no GPU.
+
+```bash
+# Stage 1 — segmentation, 5 configs x 5 folds x 3 seeds
+python scripts/train.py --config configs/ours.yaml
+python scripts/summarise.py
+
+# Which way did the fusion gate go? Needs only the checkpoints.
+python scripts/gate_report.py --ckpt-dir checkpoints
+
+# Stage 2 — grading on the pathology endpoint, one arm per invocation
+python scripts/train_grade.py --seg-config configs/ours.yaml --ref WLI --target macro
+python scripts/train_grade.py --seg-config configs/ours.yaml --ref WLI
+python scripts/summarise_grade.py --target macro     # positive control, read this first
+python scripts/summarise_grade.py --target grade
+```
+
+Stage 2 freezes the Stage-1 trunk and fits a regularised linear probe on region-pooled
+features, with the regularisation chosen inside the training folds. 48 patients cannot
+fine-tune a ResNet-34, and reusing the Stage-1 folds keeps every held-out patient unseen by
+both stages.
+
+## Results so far
+
+Stage 1 is complete: 75 runs, per-image predictions committed under `results/`.
+
+| Frame | single modality | naive early fusion | registration-free fusion |
+|---|---|---|---|
+| WLI mask | 0.718 | 0.630 | 0.716 |
+| NBI mask | 0.785 | 0.754 | 0.795 |
+
+Mean Dice. The two frames have different ground-truth masks and are **not** comparable with
+each other. Against the single-modality baseline the fusion model gains a median +0.001 on WLI
+(p = 0.62) and +0.009 on NBI (p = 0.024) — statistically visible in one frame, but not a
+clinically meaningful quantity. Against naive early fusion it gains +0.076 and +0.025, both
+p < 0.0001, and early fusion nearly doubles the coarse failure rate on WLI (15.3% → 26.0%).
+
+So the finding is that **how you fuse matters a great deal and fusion itself buys almost
+nothing** — which is what the measured misalignment (median lesion overlap 0.28) predicts.
+Whether the second modality is worth anything at all is the question Stage 2 exists to answer,
+on labels no model produced.
+
 ## Repository conventions
 
 See `CLAUDE.md` — in particular the mask-naming trap, the permanence of `configs/folds.csv`,
@@ -64,5 +109,5 @@ and the output CSV contract that the figure scripts depend on.
 
 ## Status
 
-Data packaging and fold assignment complete. Model, training loop and Colab notebook in
-progress.
+Stage 1 complete and committed. Stage 2 implemented; it needs the Stage-1 checkpoints, so it
+runs where those live.

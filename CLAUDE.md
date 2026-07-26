@@ -91,6 +91,10 @@ pred_area_frac, gt_area_frac, pred_long_axis_px, content_w
 ```
 case, config, fold, seed, y_true, y_prob
 ```
+Stage-2 `config` encodes the arm, not just the Stage-1 config: `{seg}_{ref}` for the grade
+endpoint (`ours_wli`, `wli_only_wli`, …) and `macro_{seg}_{ref}` for the positive control.
+Each patient is held out in exactly one fold, so concatenating the five folds gives one
+probability per patient per seed — that is what `summarise_grade.py` relies on.
 
 These feed `figures/fig4_*.py`, `fig5_*.py`, `fig6_*.py` directly. Changing the schema means
 re-running training.
@@ -107,3 +111,13 @@ re-running training.
   patients cannot support two full encoders.
 - Three seeds per configuration, minimum. The expected effect (~+0.02 Dice) is plausibly the
   same size as run-to-run variance; single-seed numbers are not reportable.
+- **Stage 2 extracts features under one fixed reference modality per arm.** `ours` is
+  bidirectional and could be given both directions and averaged, but then it would see twice
+  as many views as the single-modality arm and part of any gain would be view averaging rather
+  than fusion. Views *within* a direction (near and distant) are averaged — both arms have
+  those, so that is symmetric.
+- **Stage 2 runs with augmentation off.** The trunk is frozen; there is nothing to make
+  invariant, and deterministic features keep the linear fit reproducible.
+- Run the `macro` positive control before reading the `grade` result. Depressed lesions are
+  plainly visible on white light; if that separation fails, a null on grade is a statement
+  about the pipeline, not about the modalities.

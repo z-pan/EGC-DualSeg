@@ -277,13 +277,71 @@ else:
 """))
 
 cells.append(md(r"""
+## 10 — Fusion gate diagnostic
+
+Seconds, no GPU, and it decides what comes next. Stage 1 showed registration-free fusion
+beating naive early fusion decisively and beating the single-modality baselines by nothing.
+`fusion.gate` starts at 0 and multiplies the whole attended contribution, so where it ended up
+separates *the model switched the auxiliary stream off* from *the model used it and the signal
+was not there*. Only the second case justifies trying the global-context variant.
+"""))
+cells.append(code(r"""
+!python scripts/gate_report.py --ckpt-dir {DRIVE_CHECKPOINTS} --out {DRIVE_RESULTS}/gate_report.csv
+"""))
+
+cells.append(md(r"""
+## 11 — Stage 2: histological grading on the pathology endpoint
+
+This is where the dual-versus-single claim is actually adjudicated. Stage 1 scores against SAM
+masks derived from the clinician's own boxes, so a gain there is partly a statement about the
+labelling procedure. Here the label is the ESD pathology report: low-grade versus high-grade or
+worse, n = 48, 21:27.
+
+The Stage-1 trunk is frozen and only supplies a region-pooled 512-d vector per patient; a
+regularised linear probe is fitted on top, with the regularisation chosen by inner CV inside the
+training folds. 48 patients cannot fine-tune a ResNet-34, and the folds are the same ones Stage 1
+used, so no held-out patient has been seen by either stage.
+
+**Run the positive control first.** Macroscopic type (depressed 0-IIc versus not, n = 45) is
+plainly visible on white light. If the pipeline cannot separate *that*, a null result on grade
+says nothing about the modalities and everything about the pipeline.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+# (Stage-1 config, reference modality) — two frames, two arms each, exactly as in Stage 1.
+ARMS = [
+    ("configs/wli_only.yaml", "WLI"),
+    ("configs/ours.yaml",     "WLI"),
+    ("configs/nbi_only.yaml", "NBI"),
+    ("configs/ours.yaml",     "NBI"),
+]
+
+for target in ("macro", "grade"):          # positive control first, deliberately
+    print(f"\n{'='*70}\nendpoint: {target}\n{'='*70}", flush=True)
+    for cfg, ref in ARMS:
+        t0 = time.time()
+        r = subprocess.run(["python", "scripts/train_grade.py", "--seg-config", cfg,
+                            "--ref", ref, "--target", target,
+                            "--num-workers", str(NUM_WORKERS)])
+        print(f"[{cfg} ref {ref}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min",
+              flush=True)
+"""))
+cells.append(code(r"""
+!python scripts/summarise_grade.py --results {DRIVE_RESULTS} --target macro
+!python scripts/summarise_grade.py --results {DRIVE_RESULTS} --target grade
+"""))
+
+cells.append(md(r"""
 ## 8/17 archive checklist
 
 - [ ] every prediction CSV and grade CSV committed to the repository
+- [ ] `results/gate_report.csv` committed
 - [ ] checkpoints copied to Drive (they are not versioned)
 - [ ] `configs/folds.csv`, all configs and the seed list committed
 - [ ] training logs exported
 - [ ] figures regenerate locally from CSVs alone, with no GPU
+- [ ] `summarise.py` and `summarise_grade.py` both run offline against the committed CSVs
 """))
 
 nb = {"cells": cells,
