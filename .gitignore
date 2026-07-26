@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+.env
+
+# Packaged data and raw-derived artefacts carry per-patient clinical attributes.
+# They live locally and on Drive, never in the repository.
+data/packaged/
+*.npz
+*.npy
+manifest.csv
+
+# Model weights: archived to Drive, not versioned here.
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Prediction CSVs ARE committed (results/*.csv) — they are what makes the
+# figures reproducible without a GPU. Only logs and scratch output are ignored.
+results/logs/
+results/scratch/
+wandb/
+runs/

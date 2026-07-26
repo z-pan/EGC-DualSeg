@@ -1,0 +1,13 @@
+# Data preparation (scripts/package_dataset.py, scripts/make_folds.py)
+numpy>=1.24
+Pillow>=10.0
+
+# Training and analysis
+# PyTorch is intentionally unpinned here: install the build matching your CUDA
+# from https://pytorch.org before running scripts/train.py.
+# torch>=2.2
+# torchvision>=0.17
+pandas>=2.0
+scikit-learn>=1.3
+PyYAML>=6.0
+tqdm>=4.66
