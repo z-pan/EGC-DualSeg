@@ -99,8 +99,9 @@ p < 0.0001, and early fusion nearly doubles the coarse failure rate on WLI (15.3
 
 So the finding is that **how you fuse matters a great deal and fusion itself buys almost
 nothing** — which is what the measured misalignment (median lesion overlap 0.28) predicts.
-Whether the second modality is worth anything at all is the question Stage 2 exists to answer,
-on labels no model produced.
+Stage 2 puts the same question to an imaging-independent endpoint: the Stage-1 masks are
+clinician-reviewed, but their boundaries were refined within each modality's own frame, and
+the pathology grade carries no such tie to either modality.
 
 ## Repository conventions
 

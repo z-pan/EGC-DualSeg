@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """Patient-level endpoints for Stage 2, read from the packaged manifest.
 
-Both endpoints come from the ESD pathology reports, not from a model, which is
-the whole reason Stage 2 exists: Stage 1 is scored against SAM masks that were
-themselves produced from clinician boxes, so a dual-versus-single comparison
-there is partly circular. These labels are not.
+Both endpoints come from the ESD pathology reports, which is the whole reason
+Stage 2 exists. The Stage-1 masks are not weak labels — all 324 were reviewed
+case by case and accepted by the endoscopist — but within each frame their
+boundaries were still refined against that modality's own pixels, so the
+dual-versus-single comparison carries a residual asymmetry. These labels carry
+none: they are imaging-independent, and the two endpoints corroborate each other
+rather than one propping up the other.
 
 grade  -- the primary endpoint. Low-grade intraepithelial neoplasia versus
           anything worse (high-grade, or invasive adenocarcinoma). n = 48, 21:27.

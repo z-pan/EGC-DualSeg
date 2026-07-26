@@ -292,10 +292,11 @@ cells.append(code(r"""
 cells.append(md(r"""
 ## 11 — Stage 2: histological grading on the pathology endpoint
 
-This is where the dual-versus-single claim is actually adjudicated. Stage 1 scores against SAM
-masks derived from the clinician's own boxes, so a gain there is partly a statement about the
-labelling procedure. Here the label is the ESD pathology report: low-grade versus high-grade or
-worse, n = 48, 21:27.
+The second endpoint, and the one with no tie to imaging. The Stage-1 masks were reviewed and
+accepted case by case by the endoscopist, but their boundaries were still refined within each
+modality's own frame, which leaves a residual asymmetry in a dual-versus-single comparison.
+Here the label is the ESD pathology report: low-grade versus high-grade or worse, n = 48, 21:27.
+The two endpoints corroborate each other rather than one propping up the other.
 
 The Stage-1 trunk is frozen and only supplies a region-pooled 512-d vector per patient; a
 regularised linear probe is fitted on top, with the regularisation chosen by inner CV inside the

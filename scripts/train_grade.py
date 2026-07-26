@@ -4,11 +4,12 @@
     python scripts/train_grade.py --seg-config configs/ours.yaml --ref WLI
     python scripts/train_grade.py --seg-config configs/wli_only.yaml --target macro
 
-This is where the project's core claim is actually tested. Stage 1 compares a
-dual-modality model against single-modality ones on SAM-derived masks, which
-were produced from the clinician's own boxes — so a gain there is partly a
-statement about the labelling procedure. Here the endpoint is the ESD pathology
-report, and it owes nothing to any model.
+This is the second of the project's two endpoints, and the one that owes nothing
+to imaging. Stage 1 compares a dual-modality model against single-modality ones
+on clinician-reviewed masks; those masks are sound, but within each frame their
+boundaries were refined against that modality's own pixels, which leaves a
+residual asymmetry in a dual-versus-single comparison. The ESD pathology report
+has no such tie to either modality, so the two endpoints corroborate each other.
 
 The four arms of the comparison, in two independent frames (mirroring the
 Stage-1 ablation, where cross-frame Dice is meaningless):
