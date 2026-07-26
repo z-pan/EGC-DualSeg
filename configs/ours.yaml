@@ -1,0 +1,30 @@
+# Proposed model: registration-free cross-attention fusion, bidirectional.
+# One model serves both fusion directions via the reference-role embedding, so
+# the held-out fold is scored under WLI-as-reference and NBI-as-reference
+# separately (the dataset expands each val pair into both directions).
+name: ours
+mode: dual
+reference: random
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]        # 1/16 and 1/32 feature maps supply keys and values
+init_from: ""             # set to the Kvasir-pretrained checkpoint once available
+
+folds_to_run: [0, 1, 2, 3, 4]
+seeds: [0, 1, 2]
