@@ -23,3 +23,4 @@ results/logs/
 results/scratch/
 wandb/
 runs/
+checkpoints_local/

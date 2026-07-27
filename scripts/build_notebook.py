@@ -105,9 +105,11 @@ cells.append(md("## 4 — Dependencies\n\nColab ships torch and torchvision. Onl
 cells.append(code(r"""
 !pip install --quiet pyyaml pandas
 
-import torch, torchvision, yaml
+import torch, torchvision, yaml, sklearn
 print("torch", torch.__version__, "| torchvision", torchvision.__version__,
-      "| pyyaml", yaml.__version__)
+      "| pyyaml", yaml.__version__, "| sklearn", sklearn.__version__)
+# scikit-learn is Stage 2's linear probe; it ships with Colab, but assert it
+# rather than discovering the gap an hour into a run.
 """))
 
 cells.append(md(r"""
@@ -279,10 +281,46 @@ else:
 cells.append(md(r"""
 ## 10 — Read-outs that need the checkpoints
 
-Both cells below extract something from the trained weights that cannot be recovered from the
-prediction CSVs. **Run them while there is still a runtime.** After 8/20 the checkpoints are
-still on Drive but nothing can execute them.
+Everything below extracts something from the trained weights that cannot be recovered from the
+prediction CSVs. **Run it while there is still a runtime.** After 8/20 the checkpoints are still
+on Drive but nothing can execute them.
 
+### 10.0 Stage the checkpoints on local SSD — do not skip
+
+Sections 10 and 11 reopen checkpoints many times: once per (config, fold) for the exemplar dump,
+and once per (arm, fold, seed) for Stage 2, which is around 150 loads of a 108 MB file. Served
+over the Drive mount that is well over 10 GB of network reads and dominates the runtime. Copied
+once to local SSD it is a 8 GB copy and then every load is local.
+
+The copy is skipped for files already staged, so re-running after a disconnect is cheap.
+"""))
+cells.append(code(r"""
+import os, shutil, time
+
+LOCAL_CKPT = f"{REPO}/checkpoints_local"
+os.makedirs(LOCAL_CKPT, exist_ok=True)
+
+t0 = time.time()
+staged = skipped = 0
+for name in sorted(os.listdir(DRIVE_CHECKPOINTS)):
+    if not name.endswith(".pt"):
+        continue
+    src, dst = f"{DRIVE_CHECKPOINTS}/{name}", f"{LOCAL_CKPT}/{name}"
+    if os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src):
+        skipped += 1
+        continue
+    shutil.copy(src, dst)
+    staged += 1
+
+total_gb = sum(os.path.getsize(f"{LOCAL_CKPT}/{f}")
+               for f in os.listdir(LOCAL_CKPT)) / 1e9
+print(f"staged {staged}, already present {skipped}  "
+      f"({total_gb:.1f} GB, {time.time()-t0:.0f}s)")
+print("expected 75 checkpoints (5 configs x 5 folds x 3 seeds):",
+      len([f for f in os.listdir(LOCAL_CKPT) if f.endswith('.pt')]))
+"""))
+
+cells.append(md(r"""
 ### 10.1 Fusion gate diagnostic
 
 Seconds, and it decides what comes next. Stage 1 showed registration-free fusion beating naive
@@ -292,7 +330,7 @@ starts at 0 and multiplies the whole attended contribution, so where it ended up
 there*. Only the second case justifies trying the global-context variant.
 """))
 cells.append(code(r"""
-!python scripts/gate_report.py --ckpt-dir {DRIVE_CHECKPOINTS} --out {DRIVE_RESULTS}/gate_report.csv
+!python scripts/gate_report.py --ckpt-dir {LOCAL_CKPT} --out {DRIVE_RESULTS}/gate_report.csv
 """))
 
 cells.append(md(r"""
@@ -311,7 +349,7 @@ Every mask is produced by the fold that held its patient out — the script pick
 per patient, so no lesion is ever rendered by a model that trained on it.
 """))
 cells.append(code(r"""
-!python scripts/dump_exemplars.py --ckpt-dir {DRIVE_CHECKPOINTS} --results {DRIVE_RESULTS}
+!python scripts/dump_exemplars.py --ckpt-dir {LOCAL_CKPT} --results {DRIVE_RESULTS}
 """))
 
 cells.append(md(r"""
@@ -349,6 +387,7 @@ for target in ("macro", "grade"):          # positive control first, deliberatel
         t0 = time.time()
         r = subprocess.run(["python", "scripts/train_grade.py", "--seg-config", cfg,
                             "--ref", ref, "--target", target,
+                            "--ckpt-dir", LOCAL_CKPT,
                             "--num-workers", str(NUM_WORKERS)])
         print(f"[{cfg} ref {ref}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min",
               flush=True)
