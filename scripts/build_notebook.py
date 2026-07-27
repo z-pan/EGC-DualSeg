@@ -334,6 +334,28 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+### 10.1b Gate ablation -- does the auxiliary stream contribute anything?
+
+10.1 reports a parameter value and infers from it. This measures the thing directly: same
+checkpoint, same images, forward passes that differ only in what the auxiliary stream may
+contribute. Four conditions -- as trained, gate forced to 0, each frame given **another
+patient's** auxiliary view, and the auxiliary view blanked.
+
+The second of those is the strong test. A model that exploits only the auxiliary stream's
+global statistics rather than *this patient's* actual second view is indistinguishable from one
+that ignores it, and only breaking the pairing separates them.
+
+**Read the bottleneck column first.** With random weights this branch shifted the bottleneck by
+14% while the logits moved by 2e-6, purely because an untrained decoder attenuates it — reading
+only the output would have said "does nothing" when it demonstrably did something. If the
+bottleneck moves but the probabilities do not, the fusion *operator* failed rather than the
+modality, and the paper has to say so.
+"""))
+cells.append(code(r"""
+!python scripts/gate_ablation.py --ckpt-dir {LOCAL_CKPT} --out {DRIVE_RESULTS}/gate_ablation.csv
+"""))
+
+cells.append(md(r"""
 ### 10.2 Exemplar masks for the qualitative panel
 
 Training saved per-image metrics and no masks, so a qualitative figure has nothing to draw.
