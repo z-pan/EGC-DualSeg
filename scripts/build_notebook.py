@@ -277,16 +277,41 @@ else:
 """))
 
 cells.append(md(r"""
-## 10 — Fusion gate diagnostic
+## 10 — Read-outs that need the checkpoints
 
-Seconds, no GPU, and it decides what comes next. Stage 1 showed registration-free fusion
-beating naive early fusion decisively and beating the single-modality baselines by nothing.
-`fusion.gate` starts at 0 and multiplies the whole attended contribution, so where it ended up
-separates *the model switched the auxiliary stream off* from *the model used it and the signal
-was not there*. Only the second case justifies trying the global-context variant.
+Both cells below extract something from the trained weights that cannot be recovered from the
+prediction CSVs. **Run them while there is still a runtime.** After 8/20 the checkpoints are
+still on Drive but nothing can execute them.
+
+### 10.1 Fusion gate diagnostic
+
+Seconds, and it decides what comes next. Stage 1 showed registration-free fusion beating naive
+early fusion decisively and beating the single-modality baselines by nothing. `fusion.gate`
+starts at 0 and multiplies the whole attended contribution, so where it ended up separates
+*the model switched the auxiliary stream off* from *the model used it and the signal was not
+there*. Only the second case justifies trying the global-context variant.
 """))
 cells.append(code(r"""
 !python scripts/gate_report.py --ckpt-dir {DRIVE_CHECKPOINTS} --out {DRIVE_RESULTS}/gate_report.csv
+"""))
+
+cells.append(md(r"""
+### 10.2 Exemplar masks for the qualitative panel
+
+Training saved per-image metrics and no masks, so a qualitative figure has nothing to draw.
+This writes a deliberate superset — every mask picked by a stated rule, never by eye — at a
+total cost of a few tens of kilobytes.
+
+Two rules, and each mask records which one selected it so the legend can say so: `span` takes
+the 5/10/25/50/75/90/95th percentile of the proposed model's Dice in each frame, weak cases
+included; `contrast` takes the images where naive early fusion loses the most, since that is
+the claim the figure makes.
+
+Every mask is produced by the fold that held its patient out — the script picks the checkpoint
+per patient, so no lesion is ever rendered by a model that trained on it.
+"""))
+cells.append(code(r"""
+!python scripts/dump_exemplars.py --ckpt-dir {DRIVE_CHECKPOINTS} --results {DRIVE_RESULTS}
 """))
 
 cells.append(md(r"""
@@ -338,6 +363,7 @@ cells.append(md(r"""
 
 - [ ] every prediction CSV and grade CSV committed to the repository
 - [ ] `results/gate_report.csv` committed
+- [ ] `results/exemplars/` committed — masks and index; not regenerable without a GPU
 - [ ] checkpoints copied to Drive (they are not versioned)
 - [ ] `configs/folds.csv`, all configs and the seed list committed
 - [ ] training logs exported

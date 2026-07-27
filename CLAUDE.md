@@ -96,6 +96,12 @@ endpoint (`ours_wli`, `wli_only_wli`, …) and `macro_{seg}_{ref}` for the posit
 Each patient is held out in exactly one fold, so concatenating the five folds gives one
 probability per patient per seed — that is what `summarise_grade.py` relies on.
 
+`results/exemplars/` — `index.csv` plus one 1-bit PNG per selected (config, image), written by
+`scripts/dump_exemplars.py`. Predicted masks are the one figure input that the metric CSVs
+cannot reconstruct, so they are dumped while a runtime exists and committed. Each mask comes
+from the fold that held its patient out, and `index.csv` records the rule that selected it —
+a qualitative panel whose selection rule is not stated reads as cherry-picking.
+
 These feed `figures/fig4_*.py`, `fig5_*.py`, `fig6_*.py` directly. Changing the schema means
 re-running training.
 
