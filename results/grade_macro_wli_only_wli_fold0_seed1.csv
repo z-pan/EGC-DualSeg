@@ -1,0 +1,10 @@
+case,config,fold,seed,y_true,y_prob
+病例14,macro_wli_only_wli,0,1,1,0.6457566929041423
+病例17,macro_wli_only_wli,0,1,1,0.43408164573742447
+病例21,macro_wli_only_wli,0,1,0,0.25586306954641413
+病例40,macro_wli_only_wli,0,1,1,0.768911059199722
+病例44,macro_wli_only_wli,0,1,0,0.41656798332279543
+病例61,macro_wli_only_wli,0,1,0,0.5332453934724989
+病例78,macro_wli_only_wli,0,1,1,0.477144930383242
+病例81,macro_wli_only_wli,0,1,0,0.4434381622360318
+病例9,macro_wli_only_wli,0,1,1,0.5843585429213931

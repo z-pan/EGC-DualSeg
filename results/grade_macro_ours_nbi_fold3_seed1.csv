@@ -1,0 +1,9 @@
+case,config,fold,seed,y_true,y_prob
+病例27,macro_ours_nbi,3,1,0,0.5509687618596635
+病例4,macro_ours_nbi,3,1,1,0.6482714114871535
+病例45,macro_ours_nbi,3,1,1,0.6380094676849488
+病例48,macro_ours_nbi,3,1,1,0.6707680030775841
+病例65,macro_ours_nbi,3,1,0,0.46327982160038894
+病例66,macro_ours_nbi,3,1,0,0.5587251425778194
+病例68,macro_ours_nbi,3,1,0,0.5296152622182887
+病例82,macro_ours_nbi,3,1,0,0.6507427754453228
