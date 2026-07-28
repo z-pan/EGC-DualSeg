@@ -1,0 +1,28 @@
+# Controlled-misalignment study. npz / manifest / folds / name are supplied on
+# the command line so one config serves every misalignment level.
+name: synth_ours
+mode: dual
+reference: WLI
+
+npz: data/synth/synth_S_iou100.npz
+manifest: data/synth/synth_S_iou100_manifest.csv
+folds: data/synth/synth_S_iou100_folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 40
+patience: 10
+batch_size: 16
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [0]
+seeds: [0]

@@ -33,6 +33,12 @@ def main() -> int:
     ap.add_argument("--num-workers", type=int, default=None)
     ap.add_argument("--force", action="store_true",
                     help="re-run even if the prediction CSV exists")
+    # Overrides so one config can be pointed at any synthetic level without
+    # writing a yaml per level.
+    ap.add_argument("--npz", default=None)
+    ap.add_argument("--manifest", default=None)
+    ap.add_argument("--folds-csv", default=None)
+    ap.add_argument("--name", default=None)
     args = ap.parse_args()
 
     with open(args.config, encoding="utf-8") as fh:
@@ -42,10 +48,12 @@ def main() -> int:
     raw.pop("folds_to_run", None)
     raw.pop("seeds", None)
 
-    for key in ("epochs", "batch_size", "num_workers"):
+    for key in ("epochs", "batch_size", "num_workers", "npz", "manifest", "name"):
         value = getattr(args, key)
         if value is not None:
             raw[key] = value
+    if args.folds_csv is not None:
+        raw["folds"] = args.folds_csv
 
     summary = []
     for fold in folds:
