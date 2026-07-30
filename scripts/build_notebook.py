@@ -420,6 +420,90 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+## 12 — Controlled-misalignment study: PILOT
+
+The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion
+IoU 0.28, early fusion −0.088). One point is not a relationship. This dials misalignment to
+order on Kvasir-SEG, where true masks exist, so the curve can be traced and the real cohort
+placed on it.
+
+**Run this pilot before the full 44-run sweep.** It exists to answer one question:
+
+> Is there enough headroom between the single-modality baseline and the perfectly-registered
+> Oracle for the sweep to have any resolution at all?
+
+If Oracle − single < 0.03 Dice, the complementary information is too weak, every level will sit
+on top of the others, and the full sweep is wasted GPU time. Fix `--blur` / `--block` and re-run
+the pilot rather than pressing on.
+
+Two design faults this pilot already caught, both of which would have invalidated the sweep:
+
+* Fixing the scale ratio at the 1.9x measured in the real cohort **caps achievable IoU at ~0.28**
+  regardless of translation (1.9x linear is 3.6x in area), making perfect registration
+  unreachable. Scale is now a separate axis, held at 1.0.
+* Solving the shift **per image** rather than applying a constant one keeps each level within
+  about ±0.02 of its target, so the levels stay distinguishable.
+
+Kvasir-SEG is public and downloads to Colab's local disk in seconds — it never touches Drive.
+"""))
+cells.append(code(r"""
+import os, subprocess, time
+
+if not os.path.isdir("/content/Kvasir-SEG"):
+    !wget -q https://datasets.simula.no/downloads/kvasir-seg.zip -O /content/kv.zip
+    !unzip -q /content/kv.zip -d /content/
+print("Kvasir images:", len(os.listdir("/content/Kvasir-SEG/images")))
+
+# Two levels only for the pilot: perfect registration, and the real cohort's 0.28
+!python scripts/make_synthetic.py --kvasir /content/Kvasir-SEG \
+    --out data/synth --iou 1.0 0.28 --complement S --n 500
+
+PILOT = [
+    ("configs/synth_single.yaml", "iou100", "single_S"),       # baseline, level-independent
+    ("configs/synth_early.yaml",  "iou100", "early_S_iou100"), # Oracle upper bound
+    ("configs/synth_early.yaml",  "iou028", "early_S_iou028"), # misaligned to 0.28
+    ("configs/synth_ours.yaml",   "iou028", "ours_S_iou028"),  # registration-free
+]
+for cfg, lvl, name in PILOT:
+    stem = f"data/synth/synth_S_{lvl}"
+    t0 = time.time()
+    r = subprocess.run(["python", "scripts/train.py", "--config", cfg,
+                        "--npz", f"{stem}.npz", "--manifest", f"{stem}_manifest.csv",
+                        "--folds-csv", f"{stem}_folds.csv", "--name", name,
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[{name}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+# ---- pilot read-out: one decision, one number ----
+import pandas as pd, glob, os
+
+rows = {}
+for f in glob.glob(f"{DRIVE_RESULTS}/predictions_*_S*.csv"):
+    name = os.path.basename(f).replace("predictions_", "").replace("_fold0_seed0.csv", "")
+    d = pd.read_csv(f)
+    rows[name] = d.dice.mean()
+for k in sorted(rows):
+    print(f"  {k:22s} Dice {rows[k]:.4f}")
+
+single = rows.get("single_S", float("nan"))
+oracle = rows.get("early_S_iou100", float("nan"))
+head = oracle - single
+print(f"\nheadroom  Oracle(IoU 1.0) - single = {head:+.4f}")
+if head >= 0.03:
+    print("  >= 0.03  -> complementary information is strong enough; run the full sweep")
+else:
+    print("  <  0.03  -> too weak. Raise --blur or lower --block, re-run THIS pilot,")
+    print("              do not start the 44-run sweep")
+
+if "early_S_iou028" in rows:
+    print(f"\nmisalignment damage  early(0.28) - Oracle(1.0) = "
+          f"{rows['early_S_iou028'] - oracle:+.4f}")
+if "ours_S_iou028" in rows and "early_S_iou028" in rows:
+    print(f"registration-free gain  ours - early @0.28  = "
+          f"{rows['ours_S_iou028'] - rows['early_S_iou028']:+.4f}   (first signal for P2)")
+"""))
+
+cells.append(md(r"""
 ## 8/17 archive checklist
 
 - [ ] every prediction CSV and grade CSV committed to the repository
