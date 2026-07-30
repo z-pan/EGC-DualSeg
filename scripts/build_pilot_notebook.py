@@ -276,21 +276,32 @@ if noise > 0.015:
     print("  噪声偏大：任何小于约 %.3f 的差值都不要解读" % (2 * noise / np.sqrt(3)))
 
 single = rows.get("single_S")
-oracle = rows.get("early_S_iou100")
+oracle = rows.get("ours_S_iou100")     # 必须用提取得动互补信息的架构，见上文
+early0 = rows.get("early_S_iou100")
 if single is None or oracle is None:
-    print("\n缺少基线或 Oracle 的结果，检查上一个 cell 是否全部成功")
+    print("\n缺少 single_S 或 ours_S_iou100，检查上一个 cell 是否全部成功")
 else:
     head = oracle - single
-    print(f"\nheadroom = Oracle(IoU 1.0) - single = {head:+.4f}")
+    se = np.sqrt((sd.get("ours_S_iou100", 0) ** 2
+                  + sd.get("single_S", 0) ** 2) / 3)
+    print(f"\nheadroom = ours(IoU 1.0) - single = {head:+.4f}  (±{se:.4f})")
     if head >= 0.03:
-        print("  >= 0.03  ✅ 互补信息强度合适 —— 可以铺开全部 44 次扫描")
+        print("  >= 0.03  ✅ 互补信息强度合适 —— 可以铺开完整扫描")
     else:
-        print("  <  0.03  ❌ 互补信息太弱：各档会挤在一起，扫描没有分辨率")
-        print("           调大 --blur（如 6）或调小 --block（如 16）后重跑本 pilot")
+        print("  <  0.03  ❌ 完美配准下融合也没有增益：互补信息没能被利用")
+        print("           要拉开 headroom，应【增大】--block（如 64）并增大 --blur。")
+        print("           块越大，模糊区域越是连成整片、无法由邻近清晰像素插值恢复；")
+        print("           块越小反而越容易补全，单模态基线会更高。")
 
-    if "early_S_iou028" in rows:
-        print(f"\n错位损害   early(0.28) - Oracle(1.0) = {rows['early_S_iou028']-oracle:+.4f}")
-        print("  为负且明显 -> 预测 P1 成立：早融合的损害随错位增大")
+    if early0 is not None:
+        print(f"\n早融合的架构劣势  early(1.0) - single = {early0-single:+.4f}")
+        print("  完美配准下仍为负 -> 与错位无关，来自 6 通道 conv1 稀释预训练权重")
+
+    for tag, lab in (("early_S", "early"), ("ours_S", "ours")):
+        a, b = rows.get(f"{tag}_iou100"), rows.get(f"{tag}_iou028")
+        if a is not None and b is not None:
+            print(f"错位损害  {lab:5s} (0.28) - (1.0) = {b-a:+.4f}"
+                  f"   [{abs(b-a)/max(se,1e-9):.1f} SE]")
     if "ours_S_iou028" in rows and "early_S_iou028" in rows:
         d = rows["ours_S_iou028"] - rows["early_S_iou028"]
         print(f"registration-free  ours - early @0.28 = {d:+.4f}")
