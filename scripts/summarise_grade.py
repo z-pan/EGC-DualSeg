@@ -14,9 +14,19 @@ scoring, the same way the Stage-1 numbers were read. The comparison between two
 arms is paired on patients and uses DeLong, which is the test the plan specifies
 and the one that accounts for the two AUCs being estimated on the same 48 people.
 
-The two frames are separate comparisons. A WLI-referenced model and an
-NBI-referenced model are not competing on the same input, and their AUCs should
-not be put in one ranking.
+The two frames are separate comparisons *for the in-plane fusion arms*. A
+WLI-referenced `ours` and an NBI-referenced `ours` are not competing on the same
+input, and their AUCs should not be put in one ranking.
+
+Late fusion (`late_fusion`) sits outside that split: it encodes each modality in
+its own frame and concatenates, so there is no reference modality to condition
+on. It is compared against every other arm directly — legitimate here, and only
+here, because all Stage-2 arms are scored on the same patients against the same
+pathology label. Read it next to its two controls: `late_null` is the same 1024-d
+probe fitted and scored with the NBI half taken from another patient, and
+`late_aux_shuffled` is the real probe with the NBI half permuted at evaluation
+only. The first says what the extra dimensions are worth on their own; the
+second says whether the probe ever used the second modality.
 """
 from __future__ import annotations
 
@@ -35,6 +45,21 @@ FRAMES = {
     "WLI": ("wli_only_wli", "ours_wli"),
     "NBI": ("nbi_only_nbi", "ours_nbi"),
 }
+
+# Lesion-level late fusion, which has no reference frame. Each row is
+# (arm, baseline, what the difference means). Order matters: the two controls
+# come first, because the rest cannot be read without them.
+LATE_COMPARISONS = [
+    ("late_fusion", "late_null",
+     "patient-specific NBI contribution (dimensionality held fixed)"),
+    ("late_fusion", "late_aux_shuffled",
+     "how much the fitted probe actually uses this patient's NBI"),
+    ("late_null", "wli_only_wli", "price of 512 uninformative dimensions"),
+    ("late_fusion", "wli_only_wli", "late fusion vs WLI alone"),
+    ("late_fusion", "nbi_only_nbi", "late fusion vs NBI alone"),
+    ("late_fusion", "ours_wli", "late vs in-plane fusion, WLI-referenced"),
+    ("late_fusion", "ours_nbi", "late vs in-plane fusion, NBI-referenced"),
+]
 
 # Normal tail and quantile in the standard library: this script is the one that
 # has to keep working on a bare machine after the Colab subscription lapses, so
@@ -137,6 +162,22 @@ def per_patient(df: pd.DataFrame, config: str):
     return agg
 
 
+def compare(tables: dict, a: str, b: str):
+    """Paired DeLong of arm `a` against arm `b` on the patients they share."""
+    if a not in tables or b not in tables:
+        return None
+    left, right = tables[a], tables[b]
+    shared = sorted(set(left.case) & set(right.case))
+    if not shared:
+        return None
+    left = left.set_index("case").loc[shared]
+    right = right.set_index("case").loc[shared]
+    assert (left.y_true.to_numpy() == right.y_true.to_numpy()).all()
+    delta, z, p = delong_paired_test(left.y_true.to_numpy(), left.y_prob.to_numpy(),
+                                     right.y_prob.to_numpy())
+    return len(shared), delta, z, p
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default="results")
@@ -159,28 +200,43 @@ def main() -> int:
         print(f"  {config:24s} n={len(agg):3d} ({int(agg.y_true.sum())} pos)  "
               f"seeds={agg.seeds.max()}  AUC {auc:.3f}  95% CI [{lo:.3f}, {hi:.3f}]")
 
-    print("\n=== paired comparison within each frame (DeLong) ===")
+    print("\n=== in-plane fusion: paired comparison within each frame (DeLong) ===")
     for frame, (single, dual) in FRAMES.items():
         a, b = f"{prefix}{dual}", f"{prefix}{single}"
-        if a not in tables or b not in tables:
-            print(f"  {frame} frame: incomplete "
-                  f"({'missing ' + a if a not in tables else 'missing ' + b})")
+        result = compare(tables, a, b)
+        if result is None:
+            missing = a if a not in tables else b
+            print(f"  {frame} frame: incomplete (missing {missing})")
             continue
-        left, right = tables[a], tables[b]
-        shared = sorted(set(left.case) & set(right.case))
-        left = left.set_index("case").loc[shared]
-        right = right.set_index("case").loc[shared]
-        assert (left.y_true.to_numpy() == right.y_true.to_numpy()).all()
-
-        delta, z, p = delong_paired_test(left.y_true.to_numpy(),
-                                         left.y_prob.to_numpy(),
-                                         right.y_prob.to_numpy())
+        n, delta, z, p = result
         verdict = "dual higher" if delta > 0 else "single higher"
-        print(f"  {frame} frame  n={len(shared)}  "
+        print(f"  {frame} frame  n={n}  "
               f"AUC(dual) - AUC(single) = {delta:+.3f}  z={z:+.2f}  p={p:.4f}"
               f"   [{verdict}]")
 
+    late = [(a, b, meaning) for a, b, meaning in LATE_COMPARISONS
+            if f"{prefix}{a}" in tables]
+    if late:
+        print("\n=== lesion-level late fusion (no reference frame; paired DeLong) ===")
+        for a, b, meaning in late:
+            result = compare(tables, f"{prefix}{a}", f"{prefix}{b}")
+            if result is None:
+                print(f"  {a} - {b:16s} incomplete (missing {prefix}{b})")
+                continue
+            n, delta, z, p = result
+            # ASCII only: this prints to a cp936 console on the machine that
+            # writes the paper, where a stray delta sign comes out as mojibake.
+            print(f"  {a:17s} - {b:17s} n={n}  dAUC = {delta:+.3f}  z={z:+.2f}  "
+                  f"p={p:.4f}   {meaning}")
+        print("  Read the first two lines first. Without the null, a late-fusion gain "
+              "cannot be\n  told apart from having 1024 dimensions; without the "
+              "evaluation-time shuffle, a\n  null cannot be told apart from a probe "
+              "that never looked at the NBI block.")
+
     print("\nThe two frames are independent comparisons; do not rank across them.")
+    if late:
+        print("Late fusion has no frame and is comparable with all of them: the "
+              "label is the\npathology report, which belongs to neither modality.")
     if args.target == "grade":
         print("Read the positive control before reading this: "
               "python scripts/summarise_grade.py --target macro")

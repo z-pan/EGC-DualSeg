@@ -73,6 +73,12 @@ python scripts/gate_report.py --ckpt-dir checkpoints
 # Stage 2 — grading on the pathology endpoint, one arm per invocation
 python scripts/train_grade.py --seg-config configs/ours.yaml --ref WLI --target macro
 python scripts/train_grade.py --seg-config configs/ours.yaml --ref WLI
+
+# Stage 2, lesion-level late fusion: each modality encoded and pooled on its own,
+# the two 512-d vectors concatenated. Writes its shuffled-partner control alongside.
+python scripts/train_grade_late.py --target macro
+python scripts/train_grade_late.py --target grade
+
 python scripts/summarise_grade.py --target macro     # positive control, read this first
 python scripts/summarise_grade.py --target grade
 ```
@@ -110,5 +116,8 @@ and the output CSV contract that the figure scripts depend on.
 
 ## Status
 
-Stage 1 complete and committed. Stage 2 implemented; it needs the Stage-1 checkpoints, so it
-runs where those live.
+Stage 1 complete and committed. Stage 2's four in-plane arms are run and committed: the
+positive control clears (macroscopic type, AUC 0.79–0.83) and the grade endpoint is null in
+every arm, all four 95% CIs spanning 0.5. Lesion-level late fusion is implemented and not yet
+run — it is the arm that separates *NBI adds nothing* from *the in-plane operator was the
+bottleneck*, and it needs the Stage-1 checkpoints, so it runs where those live.

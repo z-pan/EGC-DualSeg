@@ -442,6 +442,55 @@ for target in ("macro", "grade"):          # positive control first, deliberatel
         print(f"[{cfg} ref {ref}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min",
               flush=True)
 """))
+cells.append(md(r"""
+### 11b Lesion-level late fusion — the arm that decides what comes next
+
+Everything above fuses the two modalities **in the image plane**, before pooling, so it has to
+solve spatial correspondence — and the measured lesion overlap between the frames is IoU 0.28.
+That makes a null result ambiguous: NBI may add nothing, or the operator may have spent its
+capacity on a registration problem that a patient-level label does not require.
+
+This arm removes the ambiguity. Each modality is encoded by **its own** single-modality trunk,
+pooled over **its own** predicted lesion region, and the two 512-d vectors are concatenated.
+Nothing is ever asked to line up. If a patient-level NBI signal exists, this is the arm that
+finds it.
+
+Two controls come with it and neither is optional. Both are free — the features are extracted
+once and reused.
+
+* `late_null` — the same 1024-d probe **fitted and scored** with the NBI half taken from another
+  patient. Without it, "1024-d beat 512-d" cannot be told apart from fusion.
+* `late_aux_shuffled` — the real fitted probe, with the NBI half permuted **at evaluation only**.
+  Without it, a null cannot be told apart from a probe that never looked at the NBI block. This
+  is the same correction the gate ablation (10.1b) forced on the gate reading: measure the use,
+  do not infer it from a coefficient.
+
+**How to read the result:**
+
+* `late_fusion` ≈ `late_null` **and** `late_fusion` ≈ `late_aux_shuffled` → the probe ignores
+  NBI and NBI carries no patient-level increment. Coarse alignment (handoff §一) is then **not
+  worth building**: alignment fixes usability, not existence, and the paper is written as a
+  negative result with a mechanism.
+* `late_fusion` > `late_null` → there is something to fuse, the in-plane operator was the
+  bottleneck, and coarse alignment + mid fusion becomes worth the days it costs.
+* `late_fusion` ≈ `late_null` but `late_fusion` ≫ `late_aux_shuffled` → the probe leans on NBI
+  and gets nothing for it; that is a statement about the probe, not about the modality, and it
+  needs saying before any of the above.
+
+No checkpoint is trained here, so this reuses the same `wli_only` / `nbi_only` weights already
+staged in 10.0.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+for target in ("macro", "grade"):          # positive control first, again
+    t0 = time.time()
+    r = subprocess.run(["python", "scripts/train_grade_late.py", "--target", target,
+                        "--ckpt-dir", LOCAL_CKPT,
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[late fusion {target}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min",
+          flush=True)
+"""))
 cells.append(code(r"""
 !python scripts/summarise_grade.py --results {DRIVE_RESULTS} --target macro
 !python scripts/summarise_grade.py --results {DRIVE_RESULTS} --target grade

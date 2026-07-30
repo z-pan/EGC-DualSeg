@@ -93,6 +93,8 @@ case, config, fold, seed, y_true, y_prob
 ```
 Stage-2 `config` encodes the arm, not just the Stage-1 config: `{seg}_{ref}` for the grade
 endpoint (`ours_wli`, `wli_only_wli`, …) and `macro_{seg}_{ref}` for the positive control.
+The lesion-level late-fusion arms have no reference modality and are named `late_fusion`,
+`late_null` and `late_aux_shuffled` (with the `macro_` prefix for the control endpoint).
 Each patient is held out in exactly one fold, so concatenating the five folds gives one
 probability per patient per seed — that is what `summarise_grade.py` relies on.
 
@@ -124,6 +126,15 @@ re-running training.
   those, so that is symmetric.
 - **Stage 2 runs with augmentation off.** The trunk is frozen; there is nothing to make
   invariant, and deterministic features keep the linear fit reproducible.
+- **Late fusion never gets read without its two controls.** `late_fusion` is a 1024-d probe and
+  the single-modality arms are 512-d, so a bare comparison confounds the second modality with
+  the extra dimensions. `late_null` fits and scores the same 1024-d probe with the NBI half
+  drawn from another patient, so `late_fusion − late_null` is the patient-specific NBI
+  contribution and `late_null − wli_only_wli` is what the dimensions cost.
+  `late_aux_shuffled` permutes the NBI half at evaluation only, keeping the fitted probe, so a
+  flat result there means the probe never used NBI rather than that NBI is uninformative —
+  the same distinction the gate ablation forced on the Stage-1 gate reading. All three come
+  from one script and cost no extra GPU time.
 - Run the `macro` positive control before reading the `grade` result. Depressed lesions are
   plainly visible on white light; if that separation fails, a null on grade is a statement
   about the pipeline, not about the modalities.
