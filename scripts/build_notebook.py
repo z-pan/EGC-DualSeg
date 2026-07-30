@@ -477,13 +477,53 @@ Kvasir-SEG is public and downloads to Colab's local disk in seconds — it never
 cells.append(code(r"""
 import os, subprocess, time
 
-if not os.path.isdir("/content/Kvasir-SEG"):
-    !wget -q https://datasets.simula.no/downloads/kvasir-seg.zip -O /content/kv.zip
-    !unzip -q /content/kv.zip -d /content/
-print("Kvasir images:", len(os.listdir("/content/Kvasir-SEG/images")))
+def find_kvasir(root="/content"):
+    # Locate a directory holding images/ + masks/. The archive does not always
+    # unpack to the name you expect, and hardcoding the path fails silently.
+    for d, _subs, _files in os.walk(root):
+        if os.path.basename(d) == "images":
+            sib = os.path.join(os.path.dirname(d), "masks")
+            if os.path.isdir(sib) and len(os.listdir(d)) > 100:
+                return os.path.dirname(d)
+    return None
+
+KV = find_kvasir()
+
+# 1) A 22 MB 500-image subset parked on Drive is the reliable path; the public
+#    download has been flaky. Build it locally with the snippet in the repo if
+#    it is not there yet.
+if KV is None:
+    subset = f"{DRIVE_ROOT}/kvasir_subset_500.zip"
+    if os.path.isfile(subset):
+        subprocess.run(["unzip", "-q", "-o", subset, "-d", "/content/"], check=False)
+        KV = find_kvasir()
+        if KV:
+            print("unpacked the Drive subset")
+
+# 2) Otherwise try the public archive, and report what actually came back
+#    instead of swallowing the error behind -q.
+if KV is None:
+    z = "/content/kv.zip"
+    for url in ("https://datasets.simula.no/downloads/kvasir-seg.zip",
+                "https://datasets.simula.no/kvasir-seg/Kvasir-SEG.zip"):
+        r = subprocess.run(["wget", "--no-check-certificate", "-O", z, url],
+                           capture_output=True, text=True)
+        size = os.path.getsize(z) if os.path.exists(z) else 0
+        print(f"{url} -> exit {r.returncode}, {size/1e6:.2f} MB")
+        if size > 10e6:
+            subprocess.run(["unzip", "-q", "-o", z, "-d", "/content/"], check=False)
+            KV = find_kvasir()
+            if KV:
+                break
+        elif r.stderr:
+            print("   ", r.stderr.strip().splitlines()[-2:])
+
+assert KV, ("Kvasir-SEG unavailable. Upload kvasir_subset_500.zip to "
+            f"{DRIVE_ROOT}/ and re-run this cell.")
+print("Kvasir:", KV, "|", len(os.listdir(os.path.join(KV, "images"))), "images")
 
 # Two levels only for the pilot: perfect registration, and the real cohort's 0.28
-!python scripts/make_synthetic.py --kvasir /content/Kvasir-SEG \
+!python scripts/make_synthetic.py --kvasir {KV} \
     --out data/synth --iou 1.0 0.28 --complement S --n 500
 
 PILOT = [
