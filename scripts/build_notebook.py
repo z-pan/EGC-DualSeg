@@ -143,15 +143,43 @@ cells.append(md(r"""
 loses nothing and the queue can resume.
 """))
 cells.append(code(r"""
+import shutil
+
+# Merge file-by-file rather than shutil.move on the directory: move() drops the
+# source INSIDE an existing destination directory instead of merging, which
+# silently produced results/exemplars/exemplars. Walking the tree and copying
+# only what Drive lacks is idempotent and cannot nest.
+def merge_into(src_dir, dst_dir):
+    copied = skipped = 0
+    for root, _dirs, files in os.walk(src_dir):
+        rel = os.path.relpath(root, src_dir)
+        out = dst_dir if rel == "." else os.path.join(dst_dir, rel)
+        os.makedirs(out, exist_ok=True)
+        for f in files:
+            s, d = os.path.join(root, f), os.path.join(out, f)
+            if os.path.exists(d):
+                skipped += 1
+            else:
+                shutil.copy2(s, d)
+                copied += 1
+    return copied, skipped
+
+# Repair any nesting left behind by the previous version of this cell.
+for sub in ("exemplars", "logs"):
+    nested = os.path.join(DRIVE_RESULTS, sub, sub)
+    if os.path.isdir(nested):
+        c, s = merge_into(nested, os.path.join(DRIVE_RESULTS, sub))
+        shutil.rmtree(nested)
+        print(f"repaired nested {sub}/{sub}: recovered {c}, already present {s}")
+
 for local, target in (("results", DRIVE_RESULTS), ("checkpoints", DRIVE_CHECKPOINTS)):
     path = os.path.join(REPO, local)
     if os.path.islink(path):
         os.unlink(path)
     elif os.path.isdir(path):
-        # move anything already written into Drive rather than discarding it
-        for f in os.listdir(path):
-            shutil.move(os.path.join(path, f), os.path.join(target, f))
+        c, s = merge_into(path, target)
         shutil.rmtree(path)
+        print(f"{local}: {c} new file(s) into Drive, {s} already there")
     os.symlink(target, path)
     print(f"{local} -> {os.readlink(path)}")
 
