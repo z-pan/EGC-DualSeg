@@ -55,6 +55,17 @@ cells.append(md(r"""
 带有一项**与错位无关的架构劣势**，把 headroom 压成了负数。
 headroom 要测的是「互补信息能否被提取」，就必须用提取得动的架构去测。
 
+### 🔴 v1 结果已全部作废（2026-07-27）
+
+第一轮 pilot 的错位是靠「平移 + 零填充」实现的，这导致 IoU 0.28 档有 **26% 的辅助视图是纯黑**
+（对照的 IoU 1.0 档只有 8%）——黑边比例跟着错位档一起变，成了第二个变量。
+置换不变的融合算子把它利用得很充分，以致 `ours@0.28` 反超 `ours@1.0` 达 0.025 Dice、
+6.7 个标准误。**错位不可能改善信息利用，这个数只可能来自填充。**
+
+现在改为**从同一张原图裁两个位置不同的窗口**——这才是「两次拍摄取景不同」的真实模拟，
+两个视图都是真实内容。实测黑边比例已回到 ref 1.4% / aux 1.6%，各档一致。
+结果写入 `results_pilot_v2/`，与 v1 分开保存。
+
 ### 设计上最要命的一点
 
 如果第二个视图只是第一个视图的几何变换，它在信息论上是**冗余**的
@@ -96,7 +107,7 @@ drive.mount("/content/drive")
 
 DRIVE_ROOT   = "/content/drive/MyDrive/EGC-DualSeg"
 REPO         = "/content/EGC-DualSeg"
-PILOT_OUT    = f"{DRIVE_ROOT}/results_pilot"      # 与主实验的 results/ 分开
+PILOT_OUT    = f"{DRIVE_ROOT}/results_pilot_v2"   # v1 的数据生成有缺陷，结果已作废
 PILOT_CKPT   = "/content/ckpt_pilot"              # pilot 的权重不必保留，放本地盘
 os.makedirs(PILOT_OUT, exist_ok=True)
 os.makedirs(PILOT_CKPT, exist_ok=True)

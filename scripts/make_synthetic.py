@@ -32,11 +32,21 @@ would smear each nominal level across a wide range of actual overlaps and the
 levels would stop being levels. Each image is bisected to its target IoU and the
 achieved value is recorded for plotting.
 
-Scale ratio is deliberately NOT fixed at the 1.9x measured in the real cohort:
-the pilot showed that doing so caps achievable IoU at ~0.28 regardless of
-translation (a 1.9x linear scale is 3.6x in area), which makes the
-perfect-registration level unreachable and stops misalignment from being a
-single controllable variable. Scale is a separate axis, left at 1.0 here.
+Two pilot findings are baked into this file.
+
+Scale is not modelled. Fixing it at the 1.9x measured in the real cohort caps
+achievable IoU at ~0.28 whatever the offset (1.9x linear is 3.6x in area),
+making perfect registration unreachable and silently coupling scale to
+misalignment.
+
+Misalignment is produced by cropping TWO windows from the same original image,
+not by translating one view with zero padding. Padding left 26% of the
+auxiliary view pure black at IoU 0.28 versus 8% at IoU 1.0 -- a second variable
+tracking the first. A permutation-invariant fusion operator exploited it hard
+enough that misaligned beat perfectly-registered by 0.025 Dice at 6.7 standard
+errors, which is physically impossible and was purely the padding. Cropping
+twice keeps both views entirely real: black pixels now sit at 1.4% vs 1.6%
+across levels.
 
 Outputs data/synth/{tag}.npz + manifest, in the same schema the real dataset
 uses, so the model, training loop and summariser run unchanged.
@@ -51,63 +61,12 @@ import os
 import numpy as np
 from PIL import Image
 
-# Scale ratio defaults to 1.0, NOT the 1.9x measured in the real cohort.
-# Found during the pilot: fixing scale at 1.9 makes the lesion 3.6x larger in
-# area, which caps achievable IoU at ~1/3.6 = 0.28 no matter the translation.
-# The "perfect registration" level then becomes unreachable and misalignment
-# stops being a single controllable variable. Scale is therefore separated out
-# and left at 1.0 for the sweep; it can be re-introduced as its own axis later.
 SIZE = 256                 # synthetic study runs at 256 to keep the sweep cheap
-
-
-def warp(arr, dx, dy, scale, order_nearest=False):
-    """Translate + scale about the image centre, zero padded."""
-    h, w = arr.shape[:2]
-    cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    src_y = (yy - cy - dy) / scale + cy
-    src_x = (xx - cx - dx) / scale + cx
-    iy = np.rint(src_y).astype(np.int32)
-    ix = np.rint(src_x).astype(np.int32)
-    ok = (iy >= 0) & (iy < h) & (ix >= 0) & (ix < w)
-    out = np.zeros_like(arr)
-    iyc, ixc = np.clip(iy, 0, h - 1), np.clip(ix, 0, w - 1)
-    if arr.ndim == 3:
-        out[ok] = arr[iyc[ok], ixc[ok]]
-    else:
-        out[ok] = arr[iyc[ok], ixc[ok]]
-    return out
 
 
 def iou(a, b):
     u = (a | b).sum()
     return float((a & b).sum()) / u if u else 1.0
-
-
-def solve_shift(mask, target_iou, scale, tol=0.015, iters=40):
-    """Bisect the translation magnitude until the warped mask hits target IoU.
-
-    Direction is fixed (diagonal) so the only free parameter is magnitude and
-    the search is monotone; a random direction per image would make the
-    achieved IoU depend on lesion anisotropy in a way that is hard to control.
-    """
-    if target_iou >= 0.999:
-        return 0.0, 0.0
-    h, w = mask.shape
-    ux, uy = 0.7071, 0.7071
-    lo, hi = 0.0, float(max(h, w))
-    for _ in range(iters):
-        mid = (lo + hi) / 2
-        m2 = warp(mask.astype(np.uint8), ux * mid, uy * mid, scale,
-                  order_nearest=True).astype(bool)
-        cur = iou(mask, m2)
-        if abs(cur - target_iou) < tol:
-            return ux * mid, uy * mid
-        if cur > target_iou:      # still too aligned -> push further
-            lo = mid
-        else:
-            hi = mid
-    return ux * (lo + hi) / 2, uy * (lo + hi) / 2
 
 
 def degrade(img, strength):
@@ -149,6 +108,75 @@ def shuffle_tiles(img, tile, rng):
     return out
 
 
+def resize(arr, size, nearest=False):
+    mode = Image.NEAREST if nearest else Image.BILINEAR
+    return np.asarray(Image.fromarray(arr).resize((size, size), mode))
+
+
+def crop_window(arr, cy, cx, win, nearest=False):
+    """Take a win x win window centred at (cy, cx); caller guarantees bounds."""
+    return arr[cy - win // 2: cy - win // 2 + win,
+               cx - win // 2: cx - win // 2 + win]
+
+
+def window_geometry(mask, win):
+    """Place the reference window on the lesion, and pick the slide direction
+    that has the most room left in the original image.
+
+    Anchoring the reference at the image centre splits the available room in
+    half and the low-IoU levels then cannot be reached: the first attempt
+    bottomed out at 0.28 when asked for 0.15. Centring on the lesion instead
+    guarantees the reference actually contains it, and sliding away from the
+    nearest border roughly doubles the usable travel.
+    """
+    H, W = mask.shape
+    ys, xs = np.nonzero(mask)
+    cy = int(np.clip(round(ys.mean()), win // 2, H - win // 2 - 1))
+    cx = int(np.clip(round(xs.mean()), win // 2, W - win // 2 - 1))
+    up, down = cy - win // 2, H - (cy + win // 2)
+    left, right = cx - win // 2, W - (cx + win // 2)
+    sy = 1 if down >= up else -1
+    sx = 1 if right >= left else -1
+    room = min(down if sy > 0 else up, right if sx > 0 else left)
+    return cy, cx, sy, sx, max(0, room)
+
+
+def solve_window_shift(mask, win, target, size, tol=0.015, iters=40):
+    """Bisect the offset between two crop windows until their masks hit target IoU.
+
+    Two windows onto the SAME original image, rather than one window plus a
+    padded translation. Padding was the previous approach and it was wrong: at
+    IoU 0.28 it left 26% of the auxiliary view as pure black, which is not
+    misalignment but a second variable, and a permutation-invariant fusion
+    operator responded to it strongly enough to beat perfect registration.
+    Cropping twice keeps both views entirely real.
+    """
+    cy, cx, sy, sx, room = window_geometry(mask, win)
+    m8 = mask.astype(np.uint8)
+    ref = resize(crop_window(m8, cy, cx, win), size, True) > 0
+    if target >= 0.999 or room <= 0:
+        return cy, cx, 0, 0, ref, ref.copy()
+
+    lo, hi = 0.0, float(room) * 1.4142      # diagonal travel
+    best = (0, 0, ref.copy(), 1.0)
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        dy = int(round(sy * mid * 0.7071))
+        dx = int(round(sx * mid * 0.7071))
+        dy = int(np.clip(dy, -(cy - win // 2), mask.shape[0] - (cy + win // 2)))
+        dx = int(np.clip(dx, -(cx - win // 2), mask.shape[1] - (cx + win // 2)))
+        aux = resize(crop_window(m8, cy + dy, cx + dx, win), size, True) > 0
+        cur = iou(ref, aux)
+        best = (dy, dx, aux, cur)
+        if abs(cur - target) < tol:
+            break
+        if cur > target:
+            lo = mid
+        else:
+            hi = mid
+    return cy, cx, best[0], best[1], ref, best[2]
+
+
 def build(args):
     files = sorted(glob.glob(os.path.join(args.kvasir, "images", "*")))
     rng = np.random.default_rng(args.seed)
@@ -162,30 +190,39 @@ def build(args):
         images, masks, rows = [], [], []
         achieved = []
         for i, fp in enumerate(files):
-            im = np.asarray(Image.open(fp).convert("RGB").resize((SIZE, SIZE),
-                                                                 Image.BILINEAR))
+            im_full = np.asarray(Image.open(fp).convert("RGB"))
             mp = os.path.join(args.kvasir, "masks", os.path.basename(fp))
-            mk = np.asarray(Image.open(mp).convert("L").resize((SIZE, SIZE),
-                                                               Image.NEAREST)) > 127
-            if mk.sum() < 50:
+            mk_full = np.asarray(Image.open(mp).convert("L")) > 127
+            H, W = mk_full.shape
+            if mk_full.sum() < 50:
                 continue
+
+            # Window small enough to leave room to slide.
+            win = int(min(H, W) * args.win_frac)
+            if win < 64:
+                continue
+            _cy, _cx, _sy, _sx, room = window_geometry(mk_full, win)
+            if room < 8:
+                continue
+
+            cy, cx, dy, dx, mk, mk2 = solve_window_shift(mk_full, win, target, SIZE)
+            got = iou(mk, mk2)
+            if mk.sum() < 50 or mk2.sum() < 50:     # lesion slid out of view
+                continue
+            achieved.append(got)
+
+            base_ref = resize(crop_window(im_full, cy, cx, win), SIZE)
+            base_aux = resize(crop_window(im_full, cy + dy, cx + dx, win), SIZE)
 
             r = np.random.default_rng(args.seed + i)
             if args.complement == "S":
                 keep = block_partition(SIZE, SIZE, args.block, r)
-                blurred = degrade(im, args.blur)
-                ref = np.where(keep[..., None], im, blurred)
-                aux_full = np.where(keep[..., None], blurred, im)   # complementary
+                ref = np.where(keep[..., None], base_ref, degrade(base_ref, args.blur))
+                aux = np.where(keep[..., None], degrade(base_aux, args.blur), base_aux)
             else:                                                   # G
-                ref = degrade(im, max(1, args.blur // 2))
-                aux_full = shuffle_tiles(degrade(im, max(1, args.blur // 2)),
-                                         args.tile, r)
-
-            dx, dy = solve_shift(mk, target, args.scale)
-            aux = warp(aux_full, dx, dy, args.scale)
-            mk2 = warp(mk.astype(np.uint8), dx, dy, args.scale,
-                       order_nearest=True).astype(bool)
-            achieved.append(iou(mk, mk2))
+                ref = degrade(base_ref, max(1, args.blur // 2))
+                aux = shuffle_tiles(degrade(base_aux, max(1, args.blur // 2)),
+                                    args.tile, r)
 
             case = f"k{i:04d}"
             for modality, arr, mm in (("WLI", ref, mk), ("NBI", aux, mk2)):
@@ -230,9 +267,9 @@ def main():
     ap.add_argument("--block", type=int, default=32)
     ap.add_argument("--tile", type=int, default=32)
     ap.add_argument("--blur", type=int, default=4)
-    ap.add_argument("--scale", type=float, default=1.0,
-                    help="aux lesion scale ratio; 1.0 keeps misalignment a "
-                         "single variable (see note at top of file)")
+    ap.add_argument("--win-frac", type=float, default=0.55,
+                    help="crop window as a fraction of the short side; the "
+                         "remainder is the room available to slide")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     build(args)
