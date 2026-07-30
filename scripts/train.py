@@ -39,6 +39,8 @@ def main() -> int:
     ap.add_argument("--manifest", default=None)
     ap.add_argument("--folds-csv", default=None)
     ap.add_argument("--name", default=None)
+    ap.add_argument("--out-dir", default=None)
+    ap.add_argument("--ckpt-dir", default=None)
     args = ap.parse_args()
 
     with open(args.config, encoding="utf-8") as fh:
@@ -48,7 +50,8 @@ def main() -> int:
     raw.pop("folds_to_run", None)
     raw.pop("seeds", None)
 
-    for key in ("epochs", "batch_size", "num_workers", "npz", "manifest", "name"):
+    for key in ("epochs", "batch_size", "num_workers", "npz", "manifest", "name",
+                "out_dir", "ckpt_dir"):
         value = getattr(args, key)
         if value is not None:
             raw[key] = value
