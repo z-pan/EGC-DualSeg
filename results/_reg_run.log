@@ -1,0 +1,26 @@
+  10/150
+  20/150
+  30/150
+  40/150
+  50/150
+  60/150
+  70/150
+  80/150
+  90/150
+  100/150
+  110/150
+  120/150
+  130/150
+  140/150
+  150/150
+
+pairs = 150
+condition    median                IQR   >=0.5   >=0.6
+none          0.285 [0.158, 0.472]     21%     11%
+rigid         0.306 [0.177, 0.525]     29%     17%
+bspline       0.322 [0.143, 0.536]     29%     19%
+
+B-spline folding (Jacobian<=0): median 2.19% of pixels
+
+reference: optimal affine using the TRUE masks reached 0.747 (upper bound, not attainable at inference)
+-> results/registration_feasibility.csv
