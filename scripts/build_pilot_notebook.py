@@ -66,7 +66,13 @@ headroom 要测的是「互补信息能否被提取」，就必须用提取得�
 
 ### 预计耗时
 
-数据生成 3–5 分钟 + 5 次训练约 25 分钟，**合计约 30 分钟**。
+数据生成 3–5 分钟 + **15 次训练（5 配置 × 3 种子）约 75 分钟**，合计约 1.5 小时。
+
+**为什么必须跑 3 个种子**：第一轮 pilot 单折单种子跑出了
+`ours@0.28 (0.8507) > ours@1.0 (0.8290)` —— 错位之后反而更好，物理上讲不通，
+说明训练噪声就在 0.02 量级，而判据是 0.03，信噪比接近 1。
+仓库的 `CLAUDE.md` 早写明「single-seed numbers are not reportable」，
+真实数据实验用 5 折 × 3 种子正是为此。
 """))
 
 cells.append(md("## 1 — 运行环境\n\n确认拿到 GPU。没有 GPU 就先去「代码执行程序 → 更改运行时类型」里改。"))
@@ -199,7 +205,7 @@ ImageNet 预训练权重被稀释，因而带有一项**与错位无关的架构
 误判为「互补信息太弱」——而实际上 `ours@0.28` 已经高于单模态。
 headroom 要测的是「互补信息能不能被提取」，就必须用提取得动的那个架构。
 
-约 25 分钟。断了重跑本 cell 即可——已完成的运行会被自动跳过。
+**15 次训练，约 75 分钟。** 断了重跑本 cell 即可——已完成的运行会被自动跳过。
 """))
 cells.append(code(r"""
 import time
@@ -231,13 +237,32 @@ cells.append(md(r"""
 cells.append(code(r"""
 import pandas as pd, glob
 
-rows = {}
-for f in glob.glob(f"{PILOT_OUT}/predictions_*_S*.csv"):
-    name = os.path.basename(f).replace("predictions_", "").replace("_fold0_seed0.csv", "")
-    rows[name] = pd.read_csv(f).dice.mean()
+import re, numpy as np
 
+# 每个配置聚合所有种子：既要均值，也要种子间标准差——
+# 没有标准差就无法判断某个差值是效应还是噪声。
+per = {}
+for f in glob.glob(f"{PILOT_OUT}/predictions_*_S*.csv"):
+    b = os.path.basename(f)
+    m = re.match(r"predictions_(.+)_fold\d+_seed(\d+)\.csv$", b)
+    if not m:
+        continue
+    per.setdefault(m.group(1), []).append(pd.read_csv(f).dice.mean())
+
+rows, sd = {}, {}
+for k, v in per.items():
+    rows[k], sd[k] = float(np.mean(v)), (float(np.std(v, ddof=1)) if len(v) > 1 else float("nan"))
+
+print(f"{'配置':24s} {'Dice':>8s} {'种子间 SD':>10s}  n")
 for k in sorted(rows):
-    print(f"  {k:22s} Dice {rows[k]:.4f}")
+    print(f"  {k:22s} {rows[k]:.4f} {sd[k]:10.4f}  {len(per[k])}")
+
+noise = np.nanmean([sd[k] for k in sd])
+print()
+print(f"平均种子间 SD = {noise:.4f}"
+      f"   -> 3 种子均值的标准误约 {noise/np.sqrt(3):.4f}")
+if noise > 0.015:
+    print("  噪声偏大：任何小于约 %.3f 的差值都不要解读" % (2 * noise / np.sqrt(3)))
 
 single = rows.get("single_S")
 oracle = rows.get("early_S_iou100")

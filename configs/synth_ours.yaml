@@ -25,4 +25,4 @@ aux_levels: [3, 4]
 init_from: ""
 
 folds_to_run: [0]
-seeds: [0]
+seeds: [0, 1, 2]
