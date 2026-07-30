@@ -45,8 +45,15 @@ cells.append(md(r"""
 > **单模态基线** 与 **完美配准的 Oracle 上界** 之间，是否有足够的 headroom？
 
 若 `Oracle − single < 0.03 Dice`，说明人为构造的「互补信息」太弱，
-各个错位档会挤在一起，整个扫描没有分辨率，44 次训练就是白跑。
-**那种情况下应调大 `--blur` / 调小 `--block` 后重跑本 pilot，而不是继续铺开。**
+各个错位档会挤在一起，整个扫描没有分辨率，铺开就是白跑。
+**那种情况下应调大 `--blur` / 调小 `--block` 后重跑本 pilot。**
+
+⚠️ **Oracle 必须用 `ours@IoU=1.0`，不能用 `early@IoU=1.0`。**
+第一轮 pilot 用了后者，得到 headroom = −0.018 并误判为「互补信息太弱」；
+但同一轮里 `ours@0.28` 已经比单模态高 +0.021，说明互补信息其实充足。
+差别在于早融合把 6 通道塞进 conv1、稀释了 ImageNet 预训练权重，
+带有一项**与错位无关的架构劣势**，把 headroom 压成了负数。
+headroom 要测的是「互补信息能否被提取」，就必须用提取得动的架构去测。
 
 ### 设计上最要命的一点
 
@@ -59,7 +66,7 @@ cells.append(md(r"""
 
 ### 预计耗时
 
-数据生成 3–5 分钟 + 4 次训练约 20 分钟，**合计约 25 分钟**。
+数据生成 3–5 分钟 + 5 次训练约 25 分钟，**合计约 30 分钟**。
 """))
 
 cells.append(md("## 1 — 运行环境\n\n确认拿到 GPU。没有 GPU 就先去「代码执行程序 → 更改运行时类型」里改。"))
@@ -181,11 +188,18 @@ cells.append(md(r"""
 | 运行 | 含义 |
 |---|---|
 | `single_S` | 单模态基线（只用参考视图，与错位档无关） |
-| `early_S_iou100` | 朴素早融合 @ 完美配准 → **Oracle 上界** |
-| `early_S_iou028` | 朴素早融合 @ IoU 0.28 → 错位造成的损害 |
-| `ours_S_iou028` | registration-free 融合 @ IoU 0.28 |
+| `early_S_iou100` | 朴素早融合 @ 完美配准 |
+| `early_S_iou028` | 朴素早融合 @ IoU 0.28 |
+| `ours_S_iou100` | registration-free @ 完美配准 → **真正的 Oracle 上界** |
+| `ours_S_iou028` | registration-free @ IoU 0.28 |
 
-约 20 分钟。断了重跑本 cell 即可——已完成的运行会被自动跳过。
+**为什么 Oracle 必须用 `ours` 而不是 `early`**：早融合把 6 通道塞进 conv1，
+ImageNet 预训练权重被稀释，因而带有一项**与错位无关的架构劣势**。
+第一轮 pilot 用 `early@1.0` 当 Oracle，headroom 被这个常数项压成负数，
+误判为「互补信息太弱」——而实际上 `ours@0.28` 已经高于单模态。
+headroom 要测的是「互补信息能不能被提取」，就必须用提取得动的那个架构。
+
+约 25 分钟。断了重跑本 cell 即可——已完成的运行会被自动跳过。
 """))
 cells.append(code(r"""
 import time
@@ -194,6 +208,7 @@ PILOT = [
     ("configs/synth_single.yaml", "iou100", "single_S"),
     ("configs/synth_early.yaml",  "iou100", "early_S_iou100"),
     ("configs/synth_early.yaml",  "iou028", "early_S_iou028"),
+    ("configs/synth_ours.yaml",   "iou100", "ours_S_iou100"),
     ("configs/synth_ours.yaml",   "iou028", "ours_S_iou028"),
 ]
 for cfg, lvl, name in PILOT:
@@ -210,7 +225,8 @@ for cfg, lvl, name in PILOT:
 cells.append(md(r"""
 ## 7 — 判读
 
-只看一个数：**headroom = Oracle(IoU 1.0) − 单模态**。
+主判据：**headroom = ours(IoU 1.0) − 单模态 ≥ 0.03**。
+同时会打印早融合的架构劣势，以及两种架构各自被错位拖累了多少。
 """))
 cells.append(code(r"""
 import pandas as pd, glob
