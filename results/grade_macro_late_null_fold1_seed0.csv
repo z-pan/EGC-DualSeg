@@ -1,0 +1,11 @@
+case,config,fold,seed,y_true,y_prob
+病例24,macro_late_null,1,0,0,0.4549543214129519
+病例26,macro_late_null,1,0,1,0.5790248660726921
+病例35,macro_late_null,1,0,0,0.6660077258726209
+病例38,macro_late_null,1,0,1,0.756717767570684
+病例39,macro_late_null,1,0,0,0.3050891408046622
+病例52,macro_late_null,1,0,1,0.2797914840623873
+病例54,macro_late_null,1,0,0,0.7623670595922372
+病例59,macro_late_null,1,0,1,0.7986699677447879
+病例72,macro_late_null,1,0,0,0.49709047249966715
+病例80,macro_late_null,1,0,0,0.21228235849728974

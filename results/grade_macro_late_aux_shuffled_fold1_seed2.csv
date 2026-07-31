@@ -1,0 +1,11 @@
+case,config,fold,seed,y_true,y_prob
+病例24,macro_late_aux_shuffled,1,2,0,0.5397161364429596
+病例26,macro_late_aux_shuffled,1,2,1,0.6721815308006693
+病例35,macro_late_aux_shuffled,1,2,0,0.5224314337531588
+病例38,macro_late_aux_shuffled,1,2,1,0.5669327871219774
+病例39,macro_late_aux_shuffled,1,2,0,0.6043135239022679
+病例52,macro_late_aux_shuffled,1,2,1,0.4591871435315124
+病例54,macro_late_aux_shuffled,1,2,0,0.396770023112145
+病例59,macro_late_aux_shuffled,1,2,1,0.6603408171315126
+病例72,macro_late_aux_shuffled,1,2,0,0.6962661191205054
+病例80,macro_late_aux_shuffled,1,2,0,0.4746252640722832

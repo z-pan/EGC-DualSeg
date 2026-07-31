@@ -1,0 +1,9 @@
+case,config,fold,seed,y_true,y_prob
+病例27,macro_late_aux_shuffled,3,0,0,0.163991242778758
+病例4,macro_late_aux_shuffled,3,0,1,0.49079401952179136
+病例45,macro_late_aux_shuffled,3,0,1,0.9167685108450867
+病例48,macro_late_aux_shuffled,3,0,1,0.4966107792574183
+病例65,macro_late_aux_shuffled,3,0,0,0.004215961704800926
+病例66,macro_late_aux_shuffled,3,0,0,0.9001128641011957
+病例68,macro_late_aux_shuffled,3,0,0,0.21558905679593915
+病例82,macro_late_aux_shuffled,3,0,0,0.9822715790879655

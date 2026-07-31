@@ -1,0 +1,9 @@
+case,config,fold,seed,y_true,y_prob
+病例27,macro_late_fusion,3,1,0,0.11920439045106251
+病例4,macro_late_fusion,3,1,1,0.9994524861639881
+病例45,macro_late_fusion,3,1,1,0.9766456461416229
+病例48,macro_late_fusion,3,1,1,0.9902135203673443
+病例65,macro_late_fusion,3,1,0,0.005013183684771961
+病例66,macro_late_fusion,3,1,0,0.005629780740647683
+病例68,macro_late_fusion,3,1,0,0.008778903570453729
+病例82,macro_late_fusion,3,1,0,0.1585288087259747
