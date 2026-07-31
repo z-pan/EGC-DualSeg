@@ -497,6 +497,39 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+### 11c Export the new CSVs — they cannot be committed from here
+
+Section 6 replaced `results/` with a **symlink into Drive**, which is what keeps a dropped
+session from losing its outputs. The cost is that git refuses to stage anything under it
+(`fatal: pathspec ... is beyond a symbolic link`) and reports every already-tracked result file
+as deleted. Committing from this clone would therefore *remove* the committed results and
+replace them with a symlink. **Do not run `git add -A` or `git commit -a` in this notebook.**
+
+Instead this bundles the new CSVs into a zip on Drive. Download it, unzip into `results/` in
+the local clone — where the directory is real — and commit there. The repository's end state is
+that every figure regenerates from committed CSVs with no GPU, so this step is not optional
+bookkeeping; it is the step that makes the run survive the runtime.
+"""))
+cells.append(code(r"""
+import glob, os, shutil
+
+stage = "/content/late_csvs"
+shutil.rmtree(stage, ignore_errors=True)
+os.makedirs(stage)
+
+# Both patterns: the control endpoint's arms are named macro_late_*, so a single
+# grade_late_* glob silently collects half of them.
+paths = sorted(glob.glob(f"{DRIVE_RESULTS}/grade_late_*.csv") +
+               glob.glob(f"{DRIVE_RESULTS}/grade_macro_late_*.csv"))
+for p in paths:
+    shutil.copy(p, stage)
+
+shutil.make_archive(f"{DRIVE_ROOT}/late_fusion_csvs", "zip", stage)
+print(f"{len(paths)} files -> {DRIVE_ROOT}/late_fusion_csvs.zip")
+print("expected 90 (3 arms x 2 endpoints x 5 folds x 3 seeds)")
+"""))
+
+cells.append(md(r"""
 ## 12 — Controlled-misalignment study: PILOT
 
 The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion
@@ -623,7 +656,9 @@ if "ours_S_iou028" in rows and "early_S_iou028" in rows:
 cells.append(md(r"""
 ## 8/17 archive checklist
 
-- [ ] every prediction CSV and grade CSV committed to the repository
+- [ ] every prediction CSV and grade CSV committed to the repository — **from the local clone,
+  never from Colab**, where `results/` is a symlink into Drive that git will not stage
+  (§11c bundles them for download)
 - [ ] `results/gate_report.csv` committed
 - [ ] `results/exemplars/` committed — masks and index; not regenerable without a GPU
 - [ ] checkpoints copied to Drive (they are not versioned)
