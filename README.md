@@ -81,6 +81,12 @@ python scripts/train_grade_late.py --target grade
 
 python scripts/summarise_grade.py --target macro     # positive control, read this first
 python scripts/summarise_grade.py --target grade
+
+# Oracle headroom probe — upper bound obtained with ground-truth masks, NOT a result.
+# Asks whether an aligned high-resolution skip path is worth building at all.
+python scripts/train.py --config configs/oracle_noskip.yaml
+python scripts/train.py --config configs/oracle_skip.yaml
+python scripts/oracle_headroom.py
 ```
 
 Stage 2 freezes the Stage-1 trunk and fits a regularised linear probe on region-pooled
@@ -116,8 +122,15 @@ and the output CSV contract that the figure scripts depend on.
 
 ## Status
 
-Stage 1 complete and committed. Stage 2's four in-plane arms are run and committed: the
-positive control clears (macroscopic type, AUC 0.79–0.83) and the grade endpoint is null in
-every arm, all four 95% CIs spanning 0.5. Lesion-level late fusion is implemented and not yet
-run — it is the arm that separates *NBI adds nothing* from *the in-plane operator was the
-bottleneck*, and it needs the Stage-1 checkpoints, so it runs where those live.
+Stage 1 complete and committed. Stage 2 complete and committed, both the four in-plane arms
+and lesion-level late fusion: the positive control clears (macroscopic type, AUC 0.83 single
+and 0.90 late-fusion, the fitted probe demonstrably using the second modality, p = 0.006)
+while the grade endpoint is null in every one of seven arms, all 95% CIs spanning 0.5. So the
+grade null is not the fusion operator's doing — the same operator delivered on the control —
+and it is a null on top of a null, since imaging does not predict grade at n = 48 by any arm.
+
+One question stays open, and only for the segmentation endpoint: the decoder has never been
+given an *aligned* auxiliary stream at high resolution, because unaligned it cannot be. Late
+fusion pools its features and so says nothing about it. `configs/oracle_skip.yaml` measures
+the ceiling of that path with ground-truth alignment, on the development fold, before anyone
+builds the honest version.

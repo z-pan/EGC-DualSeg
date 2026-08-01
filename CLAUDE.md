@@ -112,6 +112,22 @@ re-running training.
 - **U-Net skips come from the reference stream only.** Auxiliary-stream features are not
   spatially aligned with the target mask; feeding them into skips injects misalignment noise
   straight into the decoder. Fails silently — metrics just get worse.
+  The single exception is `aux_skips: true`, which is legitimate *only* with `oracle_align`
+  and exists to measure what that path would be worth if alignment were free. See below.
+- **The oracle headroom probe cheats, on purpose, and its numbers are not results.**
+  `oracle_align` warps the auxiliary frame onto the reference using the ground-truth masks of
+  **both** frames, at validation time as well as training time (`src/data/align.py`). It
+  reaches median lesion IoU ≈ 0.84 against 0.28 unaligned, so it is an upper bound on any
+  honest alignment — the analytic predicted-mask fit reaches only 0.60–0.64. Configs
+  `oracle_skip` / `oracle_noskip`, read with `scripts/oracle_headroom.py`, which applies a
+  decision rule fixed before the run: headroom ≤ 0.03 Dice closes the aligned-fusion line,
+  above it justifies building the predicted-mask version. Never report a Dice from these arms.
+- **`share_aux_geometry` must be on whenever `oracle_align` is.** The default augmentation
+  gives the auxiliary frame its own flip/rotation/affine, which would undo the alignment
+  before the model ever saw it.
+- **Lesion-level late fusion cannot speak to segmentation.** It pools before concatenating, so
+  its null result bounds the patient-level pathology endpoint only. Using it to close a
+  spatial-endpoint question is a category error — that mistake was made once already.
 - **Augment the two streams separately.** Reference stream and mask share one geometric
   transform; the auxiliary stream gets its own mild one.
 - **Cap hue jitter at ±5°.** The colour difference between modalities is the signal.

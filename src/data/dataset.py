@@ -13,6 +13,11 @@ dual    : reference and auxiliary are returned separately (the proposed fusion)
 
 The mask always belongs to the reference frame. There is no aligned mask for the
 auxiliary frame — that is the whole premise of the project.
+
+`oracle_align` suspends that premise on purpose. It warps the auxiliary frame
+onto the reference frame using the ground-truth masks of *both*, which is
+cheating, and exists only to put a ceiling on what an aligned auxiliary stream
+could be worth (see `align.py`). Nothing produced with it is reportable.
 """
 from __future__ import annotations
 
@@ -61,12 +66,15 @@ def load_pairs(manifest_path: str, folds_path: str) -> tuple[list[Pair], dict[st
 class EGCPairDataset(Dataset):
     def __init__(self, npz_path: str, manifest_path: str, folds_path: str,
                  fold: int, split: str, mode: str = "dual",
-                 reference: str = "WLI", transform=None, seed: int = 0):
+                 reference: str = "WLI", transform=None, seed: int = 0,
+                 oracle_align: bool = False):
         """
-        fold      : index of the held-out fold
-        split     : 'train' (all other folds) or 'val' (this fold)
-        mode      : 'single' | 'early' | 'dual'
-        reference : 'WLI' | 'NBI' | 'random'   ('random' only meaningful in training)
+        fold         : index of the held-out fold
+        split        : 'train' (all other folds) or 'val' (this fold)
+        mode         : 'single' | 'early' | 'dual'
+        reference    : 'WLI' | 'NBI' | 'random'   ('random' only meaningful in training)
+        oracle_align : warp the auxiliary frame onto the reference frame using the
+                       ground-truth masks of both. Cheating; headroom probe only.
         """
         assert split in {"train", "val"}
         assert mode in {"single", "early", "dual"}
@@ -83,6 +91,26 @@ class EGCPairDataset(Dataset):
         self.split, self.mode, self.reference = split, mode, reference
         self.transform = transform
         self.rng = np.random.default_rng(seed)
+        self.oracle_align = oracle_align
+        self.align_iou: dict[tuple[str, str, str], float] = {}
+        self._affines: dict[tuple[str, str, str], np.ndarray] = {}
+        # (pair index, reference modality) -> warped auxiliary frame, filled on
+        # first use. The affines themselves are searched once and memoised to
+        # disk: they are deterministic, and the search is far too slow to repeat
+        # per run, let alone per dataloader worker.
+        self._aligned: dict[tuple[int, str], np.ndarray] = {}
+        if oracle_align and mode != "single":
+            from src.data.align import load_or_build_affines
+            stem = os.path.splitext(os.path.basename(npz_path))[0]
+            cache = os.path.join(os.path.dirname(npz_path), f"oracle_affines_{stem}.npz")
+            # Built over every pair, not just this split's: train and val are
+            # separate instances and would otherwise invalidate each other's
+            # cache and re-run the search.
+            self._affines, self.align_iou = load_or_build_affines(
+                cache, self.masks, all_pairs)
+            reached = np.array(list(self.align_iou.values()))
+            print(f"  oracle alignment: median lesion IoU {np.median(reached):.3f} "
+                  f"over {len(reached)} directions (unaligned baseline 0.28)")
 
         # A held-out fold must be scored under a fixed reference, otherwise the
         # metric depends on a coin flip. Resolve 'random' to both directions.
@@ -102,6 +130,16 @@ class EGCPairDataset(Dataset):
             return MODALITIES[int(self.rng.integers(2))]
         return self.reference
 
+    def _align_aux(self, i: int, pair: Pair, ref: str, aux: str) -> np.ndarray:
+        """Oracle-warp the auxiliary frame into the reference frame. Cheating."""
+        from src.data.align import warp_affine          # local: probe-only path
+
+        key = (i, ref)
+        if key not in self._aligned:
+            a_inv = self._affines[(pair.case, pair.scale, ref)]
+            self._aligned[key] = warp_affine(self.images[pair.idx[aux]], a_inv)
+        return self._aligned[key]
+
     def __getitem__(self, i: int) -> dict:
         pair, fixed_ref = self.items[i]
         ref = self._pick_reference(fixed_ref)
@@ -110,6 +148,8 @@ class EGCPairDataset(Dataset):
         ref_img = self.images[pair.idx[ref]]
         ref_msk = self.masks[pair.idx[ref]] > 127
         aux_img = self.images[pair.idx[aux]]
+        if self.oracle_align and self.mode != "single":
+            aux_img = self._align_aux(i, pair, ref, aux)
 
         if self.transform is not None:
             ref_img, ref_msk, aux_img = self.transform(ref_img, ref_msk, aux_img)

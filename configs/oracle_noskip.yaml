@@ -1,0 +1,45 @@
+# ORACLE HEADROOM PROBE, CONTROL ARM — NOT A REPORTABLE ARM.
+#
+# Identical to `oracle_skip.yaml` except `aux_skips: false`. Same oracle
+# alignment, same shared-geometry augmentation, same fold, same seeds.
+#
+# It exists because `oracle_skip` changes three things at once relative to the
+# committed `ours` runs: the auxiliary frame is aligned, the decoder gains a
+# skip path, and the auxiliary augmentation stops being independent. Comparing
+# `oracle_skip` straight to `ours` would attribute all of that to the skip path.
+# Here alignment and augmentation are held fixed, so
+#
+#     oracle_skip - oracle_noskip
+#
+# is the aligned high-resolution skip path and nothing else. That difference is
+# the number the decision rule is about.
+name: oracle_noskip
+mode: dual
+reference: random
+
+oracle_align: true
+aux_skips: false            # the only difference from oracle_skip
+share_aux_geometry: true
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [4]
+seeds: [0, 1, 2]

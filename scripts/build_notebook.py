@@ -530,6 +530,45 @@ print("expected 90 (3 arms x 2 endpoints x 5 folds x 3 seeds)")
 """))
 
 cells.append(md(r"""
+## 11d — Oracle headroom probe: is an aligned skip path worth building?
+
+**Every number here is an upper bound obtained by cheating and none of it is reportable.**
+The auxiliary frame is warped onto the reference using the ground-truth masks of **both**
+frames, at validation time as well as training time. It reaches median lesion IoU ≈ 0.84
+against 0.28 unaligned; the honest predicted-mask fit reaches 0.60–0.64. That gap is the point:
+if the ceiling does not clear the bar, nothing below it can.
+
+**The question, and why nothing so far has answered it.** The decoder takes skips from the
+reference stream only, because the auxiliary frame is unaligned and routing it into the decoder
+injects misalignment noise silently. Fusion therefore happens at 1/16 and 1/32, while boundary
+detail lives in the high-resolution skips. Align the auxiliary frame and that path opens — a
+path the proposed architecture structurally does not have. The registration-free result
+(+0.001 / +0.009 Dice) does not bound it, and neither does lesion-level late fusion, which
+pools its features and so has nothing to say about a spatial endpoint.
+
+**Two arms, because `oracle_skip` changes three things at once** relative to `ours`: alignment,
+the skip path, and the auxiliary augmentation. `oracle_noskip` holds the first and third fixed,
+so `oracle_skip − oracle_noskip` is the skip path alone. Fold 4 is the development fold —
+hyperparameters were chosen there and frozen, so probing on it burns nothing.
+
+6 runs, minutes each. The affine search runs once and memoises to `data/packaged/`.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+for cfg in ("configs/oracle_noskip.yaml", "configs/oracle_skip.yaml"):
+    t0 = time.time()
+    r = subprocess.run(["python", "scripts/train.py", "--config", cfg,
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[{cfg}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+# Applies the decision rule fixed before the run: headroom <= 0.03 Dice closes the
+# aligned-fusion line for good; above it justifies the predicted-mask version + 5 x 3.
+!python scripts/oracle_headroom.py --results {DRIVE_RESULTS} --fold 4
+"""))
+
+cells.append(md(r"""
 ## 12 — Controlled-misalignment study: PILOT
 
 The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion

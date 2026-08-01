@@ -1,0 +1,59 @@
+# ORACLE HEADROOM PROBE — NOT A REPORTABLE ARM.
+#
+# The auxiliary frame is warped onto the reference frame using the GROUND-TRUTH
+# masks of both, at train and validation time alike. That is cheating, and the
+# Dice this produces is an upper bound, never a result.
+#
+# What it measures: the decoder currently takes skips from the reference stream
+# only, because the auxiliary frame is unaligned (median lesion overlap 0.28)
+# and routing it into the decoder injects misalignment noise silently. Fusion
+# therefore happens at 1/16 and 1/32 only, while boundary detail lives in the
+# high-resolution skips. If the auxiliary frame were aligned, that path opens —
+# and nothing in this project has ever measured whether it is worth anything.
+#
+# Read it against `oracle_noskip.yaml`, which is identical except that the skip
+# path is off. That difference, and only that difference, is the new
+# information path. Against the committed `ours` / `wli_only` fold-4 runs it
+# also carries the alignment and the shared-geometry augmentation, so those
+# comparisons answer a different question.
+#
+# Decision rule, fixed before running (scripts/oracle_headroom.py applies it):
+#   upper bound does not beat single-modality  -> the whole aligned-fusion line
+#                                                 closes, no further work
+#   upper bound beats it by > 0.03 Dice        -> build the predicted-mask
+#                                                 version (analytic 3-parameter
+#                                                 fit, reachable IoU 0.60-0.64)
+#                                                 and run the full 5 x 3
+#
+# Fold 4 is the development fold: hyperparameters were chosen there and frozen,
+# so probing on it burns nothing that later results depend on.
+name: oracle_skip
+mode: dual
+reference: random
+
+oracle_align: true          # ground-truth masks of both frames — cheating, by design
+aux_skips: true             # the path being measured
+share_aux_geometry: true    # an independent aux jitter would undo the alignment
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [4]
+seeds: [0, 1, 2]

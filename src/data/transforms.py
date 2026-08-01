@@ -13,6 +13,14 @@ Two rules that are specific to this problem:
    mainly in its green/blue balance — and a wide hue jitter would wash exactly
    that away.
 
+Rule 1 has an exception, and it must be switched on deliberately:
+`share_aux_geometry=True` gives the auxiliary frame the reference's transform
+instead of its own. That is wrong for unaligned pairs — it preserves nothing and
+throws away the misalignment augmentation — but it is *required* once the
+auxiliary frame has been aligned to the reference (`dataset.oracle_align`),
+because an independent jitter would immediately undo the alignment being
+measured.
+
 Implemented with numpy so the data pipeline has no OpenCV dependency.
 """
 from __future__ import annotations
@@ -86,12 +94,14 @@ class PairAugment:
     def __init__(self, train: bool = True, seed: int = 0,
                  max_angle: float = 15.0, scale_range: tuple[float, float] = (0.85, 1.15),
                  aux_angle: float = 7.0, aux_scale: tuple[float, float] = (0.92, 1.08),
-                 brightness: float = 0.20, contrast: float = 0.20, hue_deg: float = 5.0):
+                 brightness: float = 0.20, contrast: float = 0.20, hue_deg: float = 5.0,
+                 share_aux_geometry: bool = False):
         self.train = train
         self.rng = np.random.default_rng(seed)
         self.max_angle, self.scale_range = max_angle, scale_range
         self.aux_angle, self.aux_scale = aux_angle, aux_scale
         self.brightness, self.contrast, self.hue_deg = brightness, contrast, hue_deg
+        self.share_aux_geometry = share_aux_geometry
 
     def __call__(self, ref_img: np.ndarray, ref_mask: np.ndarray, aux_img: np.ndarray):
         if not self.train:
@@ -99,7 +109,8 @@ class PairAugment:
         rng = self.rng
 
         # --- reference frame and mask: one shared geometric transform ---------
-        if rng.random() < 0.5:
+        flip = rng.random() < 0.5
+        if flip:
             ref_img, ref_mask = ref_img[:, ::-1].copy(), ref_mask[:, ::-1].copy()
         k = int(rng.integers(4))
         if k:
@@ -110,15 +121,24 @@ class PairAugment:
         ref_mask = _affine(ref_mask.astype(np.uint8), angle, scale,
                            order_nearest=True).astype(bool)
 
-        # --- auxiliary frame: its own, milder transform -----------------------
-        if rng.random() < 0.5:
-            aux_img = aux_img[:, ::-1].copy()
-        ka = int(rng.integers(4))
-        if ka:
-            aux_img = _rot90(aux_img, ka)
-        aux_img = _affine(aux_img,
-                          rng.uniform(-self.aux_angle, self.aux_angle),
-                          rng.uniform(*self.aux_scale), order_nearest=False)
+        if self.share_aux_geometry:
+            # The auxiliary frame has already been aligned to the reference; an
+            # independent jitter here would undo exactly what is being measured.
+            if flip:
+                aux_img = aux_img[:, ::-1].copy()
+            if k:
+                aux_img = _rot90(aux_img, k)
+            aux_img = _affine(aux_img, angle, scale, order_nearest=False)
+        else:
+            # --- auxiliary frame: its own, milder transform -------------------
+            if rng.random() < 0.5:
+                aux_img = aux_img[:, ::-1].copy()
+            ka = int(rng.integers(4))
+            if ka:
+                aux_img = _rot90(aux_img, ka)
+            aux_img = _affine(aux_img,
+                              rng.uniform(-self.aux_angle, self.aux_angle),
+                              rng.uniform(*self.aux_scale), order_nearest=False)
 
         ref_img = _photometric(ref_img, rng, self.brightness, self.contrast, self.hue_deg)
         aux_img = _photometric(aux_img, rng, self.brightness, self.contrast, self.hue_deg)

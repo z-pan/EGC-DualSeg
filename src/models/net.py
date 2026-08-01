@@ -135,25 +135,47 @@ class DecoderBlock(nn.Module):
 
 
 class UNetDecoder(nn.Module):
-    """Skips are taken from the reference stream only, by design."""
+    """Skips are taken from the reference stream only, by design.
 
-    def __init__(self, enc_channels=(64, 64, 128, 256, 512), widths=(256, 128, 64, 32, 16)):
+    `aux_skips=True` breaks that rule and is only legitimate when the auxiliary
+    frame has been spatially aligned to the reference: each skip is then the
+    reference features concatenated with the aligned auxiliary features at the
+    same resolution. Unaligned, this injects misalignment noise directly into
+    the decoder and degrades silently — which is why it is off by default and
+    why the only config that turns it on is the oracle headroom probe.
+    """
+
+    def __init__(self, enc_channels=(64, 64, 128, 256, 512), widths=(256, 128, 64, 32, 16),
+                 aux_skips: bool = False):
         super().__init__()
         c0, c1, c2, c3, c4 = enc_channels
         w0, w1, w2, w3, w4 = widths
-        self.up4 = DecoderBlock(c4, c3, w0)
-        self.up3 = DecoderBlock(w0, c2, w1)
-        self.up2 = DecoderBlock(w1, c1, w2)
-        self.up1 = DecoderBlock(w2, c0, w3)
+        self.aux_skips = aux_skips
+        m = 2 if aux_skips else 1
+        self.up4 = DecoderBlock(c4, c3 * m, w0)
+        self.up3 = DecoderBlock(w0, c2 * m, w1)
+        self.up2 = DecoderBlock(w1, c1 * m, w2)
+        self.up1 = DecoderBlock(w2, c0 * m, w3)
         self.up0 = DecoderBlock(w3, 0, w4)
         self.head = nn.Conv2d(w4, 1, 1)
 
-    def forward(self, feats: list[torch.Tensor], bottleneck: torch.Tensor) -> torch.Tensor:
-        f0, f1, f2, f3, _ = feats
-        x = self.up4(bottleneck, f3)
-        x = self.up3(x, f2)
-        x = self.up2(x, f1)
-        x = self.up1(x, f0)
+    def forward(self, feats: list[torch.Tensor], bottleneck: torch.Tensor,
+                aux_feats: list[torch.Tensor] | None = None) -> torch.Tensor:
+        def skip(level: int) -> torch.Tensor:
+            f = feats[level]
+            if not self.aux_skips:
+                return f
+            if aux_feats is None:
+                raise ValueError("aux_skips is on but no auxiliary features were given")
+            a = aux_feats[level]
+            if a.shape[-2:] != f.shape[-2:]:
+                a = F.interpolate(a, size=f.shape[-2:], mode="bilinear", align_corners=False)
+            return torch.cat([f, a], dim=1)
+
+        x = self.up4(bottleneck, skip(3))
+        x = self.up3(x, skip(2))
+        x = self.up2(x, skip(1))
+        x = self.up1(x, skip(0))
         x = self.up0(x, None)
         return self.head(x)
 
@@ -164,16 +186,20 @@ class EGCNet(nn.Module):
 
     def __init__(self, mode: str = "dual", pretrained: bool = True,
                  heads: int = 8, dropout: float = 0.1,
-                 use_role_embedding: bool = True, aux_levels: tuple[int, ...] = (3, 4)):
+                 use_role_embedding: bool = True, aux_levels: tuple[int, ...] = (3, 4),
+                 aux_skips: bool = False):
         super().__init__()
         assert mode in {"single", "early", "dual"}
+        if aux_skips and mode != "dual":
+            raise ValueError("aux_skips needs a separate auxiliary stream (mode='dual')")
         self.mode = mode
         self.use_role_embedding = use_role_embedding
         self.aux_levels = aux_levels
+        self.aux_skips = aux_skips
 
         in_ch = 6 if mode == "early" else 3
         self.encoder = SharedEncoder(in_channels=in_ch, pretrained=pretrained)
-        self.decoder = UNetDecoder()
+        self.decoder = UNetDecoder(aux_skips=aux_skips)
         if mode == "dual":
             dims = tuple(SharedEncoder.STAGE_CHANNELS[i] for i in aux_levels)
             self.fusion = CrossAttentionFusion(dim=512, aux_dims=dims,
@@ -191,6 +217,7 @@ class EGCNet(nn.Module):
         feats = self.encode_reference(ref, ref_id)
         bottleneck = feats[-1]
 
+        aux_feats_all = None
         if self.mode == "dual":
             assert aux is not None, "dual mode requires the auxiliary frame"
             aux_id = 1 - ref_id
@@ -199,7 +226,8 @@ class EGCNet(nn.Module):
             role = ref_id if self.use_role_embedding else torch.zeros_like(ref_id)
             bottleneck = self.fusion(bottleneck, aux_feats, role)
 
-        logits = self.decoder(feats, bottleneck)
+        logits = self.decoder(feats, bottleneck,
+                              aux_feats_all if self.aux_skips else None)
         if logits.shape[-2:] != ref.shape[-2:]:
             logits = F.interpolate(logits, size=ref.shape[-2:],
                                    mode="bilinear", align_corners=False)

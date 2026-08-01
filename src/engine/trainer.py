@@ -43,6 +43,15 @@ class RunConfig:
     use_role_embedding: bool = True
     aux_levels: tuple[int, ...] = (3, 4)
     init_from: str = ""                # e.g. a Kvasir-pretrained checkpoint
+    # Oracle headroom probe only. `oracle_align` warps the auxiliary frame onto
+    # the reference using the ground-truth masks of both, so anything trained
+    # with it is an upper bound and not a result. The other two exist because
+    # alignment is useless without them: the skips are the information path
+    # being measured, and an independent auxiliary jitter would undo the
+    # alignment before the model ever saw it.
+    oracle_align: bool = False
+    aux_skips: bool = False
+    share_aux_geometry: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -56,11 +65,14 @@ def set_seed(seed: int) -> None:
 def build_loaders(cfg: RunConfig) -> tuple[DataLoader, DataLoader]:
     train_ds = EGCPairDataset(cfg.npz, cfg.manifest, cfg.folds, cfg.fold, "train",
                               mode=cfg.mode, reference=cfg.reference,
-                              transform=PairAugment(train=True, seed=cfg.seed),
-                              seed=cfg.seed)
+                              transform=PairAugment(
+                                  train=True, seed=cfg.seed,
+                                  share_aux_geometry=cfg.share_aux_geometry),
+                              seed=cfg.seed, oracle_align=cfg.oracle_align)
     val_ds = EGCPairDataset(cfg.npz, cfg.manifest, cfg.folds, cfg.fold, "val",
                             mode=cfg.mode, reference=cfg.reference,
-                            transform=PairAugment(train=False), seed=cfg.seed)
+                            transform=PairAugment(train=False), seed=cfg.seed,
+                            oracle_align=cfg.oracle_align)
     common = dict(collate_fn=collate, num_workers=cfg.num_workers,
                   pin_memory=torch.cuda.is_available())
     return (DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,
@@ -71,7 +83,7 @@ def build_loaders(cfg: RunConfig) -> tuple[DataLoader, DataLoader]:
 def build_model(cfg: RunConfig, device: torch.device) -> EGCNet:
     model = EGCNet(mode=cfg.mode, pretrained=cfg.pretrained,
                    use_role_embedding=cfg.use_role_embedding,
-                   aux_levels=tuple(cfg.aux_levels))
+                   aux_levels=tuple(cfg.aux_levels), aux_skips=cfg.aux_skips)
     if cfg.init_from and os.path.isfile(cfg.init_from):
         state = torch.load(cfg.init_from, map_location="cpu")
         state = state.get("model", state)
