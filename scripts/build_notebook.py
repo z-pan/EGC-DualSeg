@@ -620,6 +620,61 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+## 11f — Score the boundary, the axis Dice cannot see
+
+Every dual-versus-single comparison in this project has been decided on Dice, and it has come
+back at +0.001 to +0.009 every time. Before accepting that as "fusion buys nothing", check
+whether Dice could have detected the effect at all.
+
+Simulated at the real lesion scale (a lesion covering 13.6% of the frame, against the cohort's
+15–18%), driving the contour error from 1 px to 8 px moves the two metrics like this:
+
+| contour error | Dice | boundary-F @2px |
+|---|---|---|
+| 1 px | 0.9965 | 1.000 |
+| 3 px | 0.9896 | 0.977 |
+| 5 px | 0.9825 | 0.799 |
+| 8 px | 0.9721 | 0.566 |
+
+Dice spans **0.024** over that whole range; boundary-F spans **0.43** — roughly **18× more
+sensitive**. And a 2 px improvement in contour accuracy is worth about **0.007 Dice**, which is
+the same size as every dual-versus-single difference measured so far and sits inside the
+seed-to-seed noise.
+
+So the entire measured effect is consistent with a one-to-three-pixel contour improvement, and
+Dice cannot separate that from nothing. Meanwhile the clinical rationale for the enhanced
+modality is specifically the **demarcation line** — where the lesion ends. The v2 plan deleted
+the boundary axis; on this evidence that was premature.
+
+This needs no retraining, only inference: the prediction CSVs never stored masks, so the
+metrics are recomputed from the weights. If the arms separate on bf/nsd while staying flat on
+Dice, "fusion buys nothing" becomes "fusion buys a boundary the area metric cannot resolve",
+and the paper changes. If they stay flat here too, the negative result gets stronger, because
+it now covers the axis the clinical claim actually points at.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+t0 = time.time()
+r = subprocess.run(["python", "scripts/boundary_metrics.py",
+                    "--configs", "configs/wli_only.yaml", "configs/nbi_only.yaml",
+                    "configs/ours.yaml", "configs/early_fusion_wli.yaml",
+                    "configs/early_fusion_nbi.yaml",
+                    "--ckpt-dir", LOCAL_CKPT, "--num-workers", str(NUM_WORKERS)])
+print(f"[main arms] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+
+# The aligned arms exist on the development fold only.
+r = subprocess.run(["python", "scripts/boundary_metrics.py",
+                    "--configs", "configs/pred_skip.yaml", "configs/pred_noskip.yaml",
+                    "--folds", "4", "--ckpt-dir", LOCAL_CKPT,
+                    "--num-workers", str(NUM_WORKERS)])
+print(f"[aligned arms] exit {r.returncode}", flush=True)
+"""))
+cells.append(code(r"""
+!python scripts/summarise_boundary.py --results {DRIVE_RESULTS}
+"""))
+
+cells.append(md(r"""
 ## 12 — Controlled-misalignment study: PILOT
 
 The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion
