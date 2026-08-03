@@ -31,7 +31,8 @@ name: oracle_skip
 mode: dual
 reference: random
 
-oracle_align: true          # ground-truth masks of both frames — cheating, by design
+align_mode: oracle          # ground-truth masks of both frames — cheating, by design
+aux_fill: zero              # as originally run; see oracle_skip_shuffled for why this matters
 aux_skips: true             # the path being measured
 share_aux_geometry: true    # an independent aux jitter would undo the alignment
 

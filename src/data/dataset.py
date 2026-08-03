@@ -67,14 +67,29 @@ class EGCPairDataset(Dataset):
     def __init__(self, npz_path: str, manifest_path: str, folds_path: str,
                  fold: int, split: str, mode: str = "dual",
                  reference: str = "WLI", transform=None, seed: int = 0,
-                 oracle_align: bool = False):
+                 oracle_align: bool = False, align_mode: str = "none",
+                 predmask_npz: str = "", aux_content: str = "self",
+                 aux_fill: str = "edge"):
         """
         fold         : index of the held-out fold
         split        : 'train' (all other folds) or 'val' (this fold)
         mode         : 'single' | 'early' | 'dual'
         reference    : 'WLI' | 'NBI' | 'random'   ('random' only meaningful in training)
-        oracle_align : warp the auxiliary frame onto the reference frame using the
-                       ground-truth masks of both. Cheating; headroom probe only.
+        align_mode   : 'none'      — the auxiliary frame is left where it was
+                       'predicted' — aligned by the 3-parameter fit on the two
+                                     single-modality PREDICTED masks. This is the
+                                     designed pipeline and is honest.
+                       'oracle'    — aligned by the 6-parameter fit on the two
+                                     GROUND-TRUTH masks. Cheating; upper bound only.
+        predmask_npz : required by align_mode='predicted'; written by
+                       scripts/predict_masks.py for this (fold, seed)
+        aux_content  : 'self'     — this patient's auxiliary frame
+                       'shuffled' — ANOTHER patient's, warped by this pair's own
+                                    transform. The control that separates "the
+                                    second modality helped" from "the warp's own
+                                    geometry gave the lesion away".
+        aux_fill     : what warping leaves outside the source; see align.warp_affine
+        oracle_align : deprecated alias for align_mode='oracle'
         """
         assert split in {"train", "val"}
         assert mode in {"single", "early", "dual"}
@@ -91,26 +106,58 @@ class EGCPairDataset(Dataset):
         self.split, self.mode, self.reference = split, mode, reference
         self.transform = transform
         self.rng = np.random.default_rng(seed)
-        self.oracle_align = oracle_align
+        if oracle_align and align_mode == "none":
+            align_mode = "oracle"
+        assert align_mode in {"none", "predicted", "oracle"}
+        assert aux_content in {"self", "shuffled"}
+        self.align_mode, self.aux_content, self.aux_fill = align_mode, aux_content, aux_fill
         self.align_iou: dict[tuple[str, str, str], float] = {}
         self._affines: dict[tuple[str, str, str], np.ndarray] = {}
         # (pair index, reference modality) -> warped auxiliary frame, filled on
-        # first use. The affines themselves are searched once and memoised to
-        # disk: they are deterministic, and the search is far too slow to repeat
-        # per run, let alone per dataloader worker.
+        # first use. The affines themselves are computed once: the oracle search
+        # is far too slow to repeat per run, let alone per dataloader worker.
         self._aligned: dict[tuple[int, str], np.ndarray] = {}
-        if oracle_align and mode != "single":
-            from src.data.align import load_or_build_affines
-            stem = os.path.splitext(os.path.basename(npz_path))[0]
-            cache = os.path.join(os.path.dirname(npz_path), f"oracle_affines_{stem}.npz")
-            # Built over every pair, not just this split's: train and val are
-            # separate instances and would otherwise invalidate each other's
-            # cache and re-run the search.
-            self._affines, self.align_iou = load_or_build_affines(
-                cache, self.masks, all_pairs)
+
+        if align_mode != "none" and mode != "single":
+            from src.data.align import build_affines, load_or_build_affines
+            if align_mode == "predicted":
+                if not predmask_npz or not os.path.isfile(predmask_npz):
+                    raise FileNotFoundError(
+                        f"align_mode='predicted' needs {predmask_npz!r}.\n"
+                        "  python scripts/predict_masks.py --fold "
+                        f"{fold} --seeds {seed}")
+                source = np.load(predmask_npz)["pred"]
+                self._affines, self.align_iou = build_affines(
+                    source, all_pairs, method="analytic")
+                label = "predicted-mask (3-parameter)"
+            else:
+                stem = os.path.splitext(os.path.basename(npz_path))[0]
+                cache = os.path.join(os.path.dirname(npz_path),
+                                     f"oracle_affines_{stem}.npz")
+                # Built over every pair, not just this split's: train and val are
+                # separate instances and would otherwise invalidate each other's
+                # cache and re-run the search.
+                self._affines, self.align_iou = load_or_build_affines(
+                    cache, self.masks, all_pairs, method="optimal")
+                label = "ORACLE (ground-truth masks — upper bound, not a result)"
             reached = np.array(list(self.align_iou.values()))
-            print(f"  oracle alignment: median lesion IoU {np.median(reached):.3f} "
-                  f"over {len(reached)} directions (unaligned baseline 0.28)")
+            print(f"  alignment [{label}]: median overlap {np.median(reached):.3f} "
+                  f"over {len(reached)} directions (unaligned baseline 0.28); "
+                  f"fill={aux_fill}, aux content={aux_content}")
+
+        # Which pair lends its auxiliary frame. A derangement, so no pair keeps
+        # its own; fixed by seed so the control is reproducible.
+        self._partner = list(range(len(self.pairs)))
+        if aux_content == "shuffled" and len(self.pairs) > 1:
+            rng = np.random.default_rng([seed, fold, 0 if split == "train" else 1])
+            order = np.arange(len(self.pairs))
+            for _ in range(64):
+                perm = rng.permutation(len(self.pairs))
+                if not np.any(perm == order):
+                    break
+            else:
+                perm = np.roll(order, 1)
+            self._partner = perm.tolist()
 
         # A held-out fold must be scored under a fixed reference, otherwise the
         # metric depends on a coin flip. Resolve 'random' to both directions.
@@ -130,14 +177,27 @@ class EGCPairDataset(Dataset):
             return MODALITIES[int(self.rng.integers(2))]
         return self.reference
 
+    def _aux_source(self, pair: Pair, aux: str) -> int:
+        """Row of the auxiliary image to warp — this pair's, or a partner's."""
+        if self.aux_content == "self":
+            return pair.idx[aux]
+        position = self.pairs.index(pair)
+        return self.pairs[self._partner[position]].idx[aux]
+
     def _align_aux(self, i: int, pair: Pair, ref: str, aux: str) -> np.ndarray:
-        """Oracle-warp the auxiliary frame into the reference frame. Cheating."""
-        from src.data.align import warp_affine          # local: probe-only path
+        """Warp the auxiliary frame into the reference frame.
+
+        The transform always belongs to THIS pair, even when the content comes
+        from another patient: the control has to hold the warp's geometry fixed
+        and vary only what is being warped, or it measures nothing.
+        """
+        from src.data.align import warp_affine
 
         key = (i, ref)
         if key not in self._aligned:
             a_inv = self._affines[(pair.case, pair.scale, ref)]
-            self._aligned[key] = warp_affine(self.images[pair.idx[aux]], a_inv)
+            self._aligned[key] = warp_affine(self.images[self._aux_source(pair, aux)],
+                                             a_inv, fill=self.aux_fill)
         return self._aligned[key]
 
     def __getitem__(self, i: int) -> dict:
@@ -148,8 +208,10 @@ class EGCPairDataset(Dataset):
         ref_img = self.images[pair.idx[ref]]
         ref_msk = self.masks[pair.idx[ref]] > 127
         aux_img = self.images[pair.idx[aux]]
-        if self.oracle_align and self.mode != "single":
+        if self.align_mode != "none" and self.mode != "single":
             aux_img = self._align_aux(i, pair, ref, aux)
+        elif self.aux_content == "shuffled" and self.mode != "single":
+            aux_img = self.images[self._aux_source(pair, aux)]
 
         if self.transform is not None:
             ref_img, ref_msk, aux_img = self.transform(ref_img, ref_msk, aux_img)

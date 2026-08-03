@@ -17,7 +17,8 @@ name: oracle_noskip
 mode: dual
 reference: random
 
-oracle_align: true
+align_mode: oracle
+aux_fill: zero
 aux_skips: false            # the only difference from oracle_skip
 share_aux_geometry: true
 

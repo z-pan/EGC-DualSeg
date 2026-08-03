@@ -49,7 +49,11 @@ class RunConfig:
     # alignment is useless without them: the skips are the information path
     # being measured, and an independent auxiliary jitter would undo the
     # alignment before the model ever saw it.
-    oracle_align: bool = False
+    oracle_align: bool = False          # deprecated alias for align_mode='oracle'
+    align_mode: str = "none"            # none | predicted | oracle
+    predmask_npz: str = ""              # {fold}/{seed} placeholders are filled in
+    aux_content: str = "self"           # self | shuffled
+    aux_fill: str = "edge"              # edge | zero
     aux_skips: bool = False
     share_aux_geometry: bool = False
     extra: dict = field(default_factory=dict)
@@ -63,16 +67,23 @@ def set_seed(seed: int) -> None:
 
 
 def build_loaders(cfg: RunConfig) -> tuple[DataLoader, DataLoader]:
+    # The predicted masks are per (fold, seed): the model that segments a patient
+    # must be the one that held them out, or the alignment quietly sees the answer.
+    predmask = cfg.predmask_npz.format(fold=cfg.fold, seed=cfg.seed) \
+        if cfg.predmask_npz else ""
+    align = dict(align_mode=cfg.align_mode, oracle_align=cfg.oracle_align,
+                 predmask_npz=predmask, aux_content=cfg.aux_content,
+                 aux_fill=cfg.aux_fill)
     train_ds = EGCPairDataset(cfg.npz, cfg.manifest, cfg.folds, cfg.fold, "train",
                               mode=cfg.mode, reference=cfg.reference,
                               transform=PairAugment(
                                   train=True, seed=cfg.seed,
                                   share_aux_geometry=cfg.share_aux_geometry),
-                              seed=cfg.seed, oracle_align=cfg.oracle_align)
+                              seed=cfg.seed, **align)
     val_ds = EGCPairDataset(cfg.npz, cfg.manifest, cfg.folds, cfg.fold, "val",
                             mode=cfg.mode, reference=cfg.reference,
                             transform=PairAugment(train=False), seed=cfg.seed,
-                            oracle_align=cfg.oracle_align)
+                            **align)
     common = dict(collate_fn=collate, num_workers=cfg.num_workers,
                   pin_memory=torch.cuda.is_available())
     return (DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,

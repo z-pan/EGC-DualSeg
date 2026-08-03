@@ -49,6 +49,8 @@ a direct search chase it would find shape coincidences rather than pose.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 # Below this many lesion pixels the second moments are not estimable and the
@@ -79,13 +81,31 @@ def _invsqrtm_spd(a: np.ndarray) -> np.ndarray:
     return (v / np.sqrt(np.clip(w, 1e-12, None))) @ v.T
 
 
-def warp_affine(img: np.ndarray, a_inv: np.ndarray, nearest: bool = False) -> np.ndarray:
+def warp_affine(img: np.ndarray, a_inv: np.ndarray, nearest: bool = False,
+                fill: str = "edge") -> np.ndarray:
     """Resample `img` through `a_inv`, which maps destination (row, col) to source.
 
-    Bilinear, zero outside. Same convention as `transforms._affine`, which this
-    deliberately mirrors rather than reuses: that one is parameterised by angle
-    and scale, this one by a general 2x3 matrix.
+    Bilinear. Same convention as `transforms._affine`, which this deliberately
+    mirrors rather than reuses: that one is parameterised by angle and scale,
+    this one by a general 2x3 matrix.
+
+    `fill` decides what happens outside the source, and it is not a detail.
+    Each pair gets its own transform, so with `fill="zero"` the black border's
+    shape is a function of that transform — and when the transform came from the
+    masks, the border silhouettes the answer. A model can then localise the
+    lesion without looking at a single pixel of image content. The Kvasir pilot
+    was bitten by exactly this: zero padding made a misaligned condition beat a
+    perfectly registered one by 0.025 Dice at 6.7 standard errors, which is
+    physically impossible and was entirely the padding.
+
+    `fill="edge"` replicates the border instead, which removes the hard
+    silhouette. It does not make the warp completely invisible — nothing does —
+    which is why the shuffled-content control measures whatever is left rather
+    than assuming it away. `fill="zero"` is kept only so that already-trained
+    arms can be reproduced and compared against on equal terms.
     """
+    if fill not in {"edge", "zero"}:
+        raise ValueError(f"fill must be 'edge' or 'zero', got {fill!r}")
     h, w = img.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
     src_y = a_inv[0, 0] * yy + a_inv[0, 1] * xx + a_inv[0, 2]
@@ -95,9 +115,10 @@ def warp_affine(img: np.ndarray, a_inv: np.ndarray, nearest: bool = False) -> np
         iy = np.rint(src_y).astype(np.int32)
         ix = np.rint(src_x).astype(np.int32)
         valid = (iy >= 0) & (iy < h) & (ix >= 0) & (ix < w)
-        out = np.zeros_like(img)
-        out[valid] = img[np.clip(iy, 0, h - 1)[valid], np.clip(ix, 0, w - 1)[valid]]
-        return out
+        out = img[np.clip(iy, 0, h - 1), np.clip(ix, 0, w - 1)]
+        if fill == "zero":
+            out = np.where(valid[..., None] if img.ndim == 3 else valid, out, 0)
+        return out.astype(img.dtype)
 
     y0 = np.floor(src_y).astype(np.int32)
     x0 = np.floor(src_x).astype(np.int32)
@@ -113,7 +134,8 @@ def warp_affine(img: np.ndarray, a_inv: np.ndarray, nearest: bool = False) -> np
     top = src[y0c, x0c] * (1 - wx) + src[y0c, x1c] * wx
     bot = src[y1c, x0c] * (1 - wx) + src[y1c, x1c] * wx
     out = top * (1 - wy) + bot * wy
-    out[~valid] = 0
+    if fill == "zero":
+        out[~valid] = 0
     return out.astype(img.dtype)
 
 
@@ -203,29 +225,71 @@ def optimal_affine(ref_mask: np.ndarray, aux_mask: np.ndarray,
     return best, full_res_iou(best)
 
 
-def build_affines(masks: np.ndarray, pairs, modalities=("WLI", "NBI")
-                  ) -> tuple[dict, dict]:
+def analytic_affine(ref_mask: np.ndarray, aux_mask: np.ndarray
+                    ) -> tuple[np.ndarray, float]:
+    """The three-parameter fit the deployed pipeline actually uses.
+
+    Translation and isotropic scale, from the two centroids and the square root
+    of the area ratio. Closed form, no search. Unlike `optimal_affine` this is
+    meant to be driven by **predicted** masks, so it runs on a patient whose
+    annotation nobody has — which is the whole point.
+
+    Three parameters rather than six is deliberate. Second moments estimated
+    from a predicted mask are far noisier than its centroid and area, and the
+    handoff measured this fit reaching lesion IoU 0.60-0.64 while being
+    insensitive to mask quality across Dice 0.65-0.85. A six-parameter fit on
+    predicted masks would chase that noise.
+
+    Returns (a_inv, achieved_iou); the IoU is against whatever masks were passed
+    in, so with predicted masks it is a self-consistency figure, not a score.
+    """
+    identity = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    ref_mask, aux_mask = ref_mask.astype(bool), aux_mask.astype(bool)
+    n_ref, n_aux = int(ref_mask.sum()), int(aux_mask.sum())
+    if n_ref < MIN_MASK_PX or n_aux < MIN_MASK_PX:
+        return identity, _iou(ref_mask, aux_mask)
+
+    ys, xs = np.nonzero(ref_mask); c_ref = np.array([ys.mean(), xs.mean()])
+    ys, xs = np.nonzero(aux_mask); c_aux = np.array([ys.mean(), xs.mean()])
+    scale = math.sqrt(n_ref / n_aux)
+
+    linear = np.eye(2) / scale
+    a_inv = np.concatenate([linear, (c_aux - linear @ c_ref)[:, None]], axis=1)
+    warped = warp_affine(aux_mask.astype(np.uint8), a_inv, nearest=True).astype(bool)
+    return a_inv, _iou(ref_mask, warped)
+
+
+def build_affines(masks: np.ndarray, pairs, modalities=("WLI", "NBI"),
+                  method: str = "optimal") -> tuple[dict, dict]:
     """Oracle affines for every (pair, reference modality). Slow; cache it.
 
     Returns (affines, achieved) keyed by (case, scale, reference). About 0.4 s
     per direction, so a few minutes for the cohort — worth doing once rather
     than once per run, and definitely rather than once per dataloader worker.
     """
+    fit = {"optimal": optimal_affine, "analytic": analytic_affine}[method]
     affines, achieved = {}, {}
     for pair in pairs:
         for ref in modalities:
             aux = modalities[1 - modalities.index(ref)]
-            a_inv, iou = optimal_affine(masks[pair.idx[ref]] > 127,
-                                        masks[pair.idx[aux]] > 127)
+            a_inv, iou = fit(masks[pair.idx[ref]] > 127, masks[pair.idx[aux]] > 127)
             affines[(pair.case, pair.scale, ref)] = a_inv
             achieved[(pair.case, pair.scale, ref)] = iou
     return affines, achieved
 
 
 def load_or_build_affines(cache_path: str, masks: np.ndarray, pairs,
+                          method: str = "optimal",
                           verbose: bool = True) -> tuple[dict, dict]:
-    """Same, memoised to an .npz next to the packaged data (gitignored)."""
+    """Same, memoised to an .npz next to the packaged data (gitignored).
+
+    Only the six-parameter search is slow enough to be worth caching, but both
+    go through here so the caller never has to know which is which.
+    """
     import os
+
+    if method == "analytic":                 # closed form; caching would cost more
+        return build_affines(masks, pairs, method=method)
 
     keys = [(p.case, p.scale, ref) for p in pairs for ref in ("WLI", "NBI")]
     if os.path.isfile(cache_path):
@@ -239,7 +303,7 @@ def load_or_build_affines(cache_path: str, masks: np.ndarray, pairs,
     if verbose:
         print(f"  building oracle affines for {len(pairs)} pairs "
               f"(one-off, ~{0.8 * len(pairs):.0f}s) -> {cache_path}")
-    affines, achieved = build_affines(masks, pairs)
+    affines, achieved = build_affines(masks, pairs, method=method)
     os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
     ordered = list(affines)
     np.savez_compressed(

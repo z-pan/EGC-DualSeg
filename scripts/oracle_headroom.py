@@ -135,6 +135,44 @@ def main() -> int:
         print(f"   {frame} frame  " + ("unavailable" if result is None else
                                        f"n={result[0]:3d} images   {result[1]:+.4f} Dice"))
 
+    # ---- the two things that decide whether headroom 1 means anything --------
+    artefact = {}
+    if "oracle_skip_shuffled" in present:
+        print("\n4. ARTEFACT CHECK: the same transform, another patient's auxiliary content")
+        for frame in ("WLI", "NBI"):
+            real = paired(df, "oracle_skip", "oracle_skip_shuffled", frame)
+            art = paired(df, "oracle_skip_shuffled", "oracle_noskip", frame)
+            if real is None or art is None:
+                print(f"   {frame}: unavailable")
+                continue
+            artefact[frame] = (real[1], art[1])
+            print(f"   {frame} frame   this patient's content {real[1]:+.4f}"
+                  f"   |   warp geometry alone {art[1]:+.4f} Dice")
+        if artefact:
+            worst = max(a for _, a in artefact.values())
+            print(f"   -> the zero-fill silhouette covers a median 22% of the auxiliary\n"
+                  f"      channel, so treat any large 'warp geometry alone' term as the\n"
+                  f"      probe measuring padding rather than a modality.")
+    else:
+        print("\n4. ARTEFACT CHECK: not run. Headroom 1 is NOT interpretable without it —"
+              "\n   python scripts/train.py --config configs/oracle_skip_shuffled.yaml")
+
+    if "pred_skip" in present and "pred_noskip" in present:
+        print("\n5. THE HONEST PIPELINE (predicted-mask alignment; these numbers ARE reportable)")
+        for frame in ("WLI", "NBI"):
+            for a, b, what in (("pred_skip", "pred_noskip", "skip path"),
+                               ("pred_skip", "pred_skip_shuffled", "this patient's aux"),
+                               ("pred_skip", SINGLE[frame], "vs single modality")):
+                result = paired(df, a, b, frame)
+                if result is None:
+                    continue
+                print(f"   {frame} frame  {what:22s} n={result[0]:3d}  {result[1]:+.4f} Dice")
+    else:
+        print("\n5. THE HONEST PIPELINE: not run. The oracle bounds it, it does not predict it."
+              "\n   python scripts/predict_masks.py --fold 4 --seeds 0 1 2"
+              "\n   python scripts/train.py --config configs/pred_noskip.yaml"
+              "\n   python scripts/train.py --config configs/pred_skip.yaml")
+
     print("\n" + "=" * 74)
     if not headroom:
         print("VERDICT: cannot be read; the headroom comparison is incomplete.")
@@ -143,10 +181,21 @@ def main() -> int:
     print(f"largest headroom across frames: {best:+.4f} Dice "
           f"(threshold {HEADROOM_THRESHOLD:+.2f})")
     if best > HEADROOM_THRESHOLD:
-        print("VERDICT: worth building. Implement the predicted-mask alignment\n"
-              "(analytic 3-parameter fit, reachable lesion IoU 0.60-0.64) and run\n"
-              "the full 5 folds x 3 seeds. Expect less than this: the oracle\n"
-              "aligns to 0.845 and the honest version cannot.")
+        if not artefact:
+            print("VERDICT: threshold cleared, but NOT yet actionable. Clearing it is a\n"
+                  "necessary condition, not a sufficient one: the oracle transform is\n"
+                  "fitted to the ground-truth masks, so its zero-fill silhouette (a median\n"
+                  "22% of the auxiliary channel) can localise the lesion on its own. Run\n"
+                  "configs/oracle_skip_shuffled.yaml, then read section 4 above.")
+        elif max(a for _, a in artefact.values()) > 0.5 * best:
+            print("VERDICT: the headroom is mostly ARTEFACT. Swapping in another patient's\n"
+                  "auxiliary content keeps most of the gain, so the probe measured the warp\n"
+                  "geometry rather than a second modality. Close the aligned-fusion line.")
+        else:
+            print("VERDICT: worth building, and the artefact control supports it. Run the\n"
+                  "predicted-mask arms (configs/pred_*.yaml) — the analytic 3-parameter fit\n"
+                  "reaches lesion IoU 0.60-0.64 against this oracle's 0.845, and that gap is\n"
+                  "not a scaling factor, so only pred_* says what the pipeline is worth.")
     else:
         print("VERDICT: close the line. This is the CEILING (the oracle aligns to\n"
               "median lesion IoU 0.845) and it does not clear the threshold, so the\n"

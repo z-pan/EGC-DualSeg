@@ -1,0 +1,53 @@
+# The designed pipeline, run honestly: the designed pipeline, with the aligned high-resolution skip path.
+#
+# Step 1 of the plan is "segment each modality on its own"; step 2 is "align the
+# two frames by their predicted masks"; step 3 is "fuse". Alignment here comes
+# from scripts/predict_masks.py — the analytic 3-parameter fit (two centroids
+# plus the square root of the area ratio) on masks the models predicted, never
+# on the annotation. Nothing in this config sees a ground-truth mask outside the
+# loss, so unlike the oracle arms these numbers ARE reportable.
+#
+# The ceiling this sits under: the oracle fit reaches lesion overlap 0.845, the
+# predicted-mask fit 0.60-0.64. The gap is not a scaling factor. Predicted-mask
+# alignment can only be as good as the model's own segmentation, so the
+# auxiliary frame lands where the model already believes the lesion is — it can
+# refine a boundary, it cannot rescue a gross localisation error. The oracle
+# places it better than, and independently of, that belief.
+#
+# Read the three pred_* arms together:
+#   pred_skip - pred_noskip           the skip path, alignment held fixed
+#   pred_skip - pred_skip_shuffled    what THIS patient's second modality gave
+#   pred_skip - wli_only / nbi_only   whether any of it beats one modality alone
+name: pred_skip
+mode: dual
+reference: random
+
+align_mode: predicted
+predmask_npz: data/packaged/predmasks_fold{fold}_seed{seed}.npz
+aux_fill: edge              # no zero border: its silhouette would track the transform
+aux_content: self
+aux_skips: true
+share_aux_geometry: true    # an independent aux jitter would undo the alignment
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [4]
+seeds: [0, 1, 2]

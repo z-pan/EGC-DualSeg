@@ -569,6 +569,57 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+## 11e — Falsify the probe, then run the pipeline honestly
+
+11d cleared its threshold (+0.053 Dice on the WLI frame). Before acting on that, two things
+have to be checked, because the oracle cheats in a second way nobody costed.
+
+**The zero-fill silhouette.** Each pair gets its own transform, and with zero padding the black
+region left outside the source is a function of that transform — which was fitted to the
+ground-truth masks. Measured over the 300 directions, that black region is a **median 22% of
+the auxiliary channel and over 50% in a quarter of them**. A decoder handed that at high
+resolution can localise the lesion without reading one pixel of content. The Kvasir pilot was
+already caught by this exact mechanism once (misaligned beat perfectly-registered by 0.025 Dice
+at 6.7 SE — physically impossible, entirely padding).
+
+`oracle_skip_shuffled` holds the transform, the fill and everything else fixed and swaps only
+*whose* auxiliary image gets warped:
+
+* `oracle_skip − oracle_skip_shuffled` → what this patient's second modality actually gave
+* `oracle_skip_shuffled − oracle_noskip` → what the warp geometry gave away, i.e. the artefact
+
+**Then run the real pipeline.** The designed flow is *segment each modality → align by the two
+predicted masks → fuse*, and the Stage-1 checkpoints make that cheap at one fold. The
+`pred_*` arms use the analytic 3-parameter fit on predicted masks, never on annotation, with
+edge fill instead of zeros — so unlike the oracle arms **their numbers are reportable**.
+
+The oracle is not a forecast for these. Predicted-mask alignment can only be as good as the
+model's own segmentation, so the auxiliary frame lands where the model already believes the
+lesion is: it can refine a boundary, it cannot rescue a gross localisation error. The oracle
+places it better than, and independently of, that belief.
+"""))
+cells.append(code(r"""
+# Step 1 of the designed pipeline: predicted masks from the single-modality models.
+# Needs the Stage-1 checkpoints staged in 10.0.
+!python scripts/predict_masks.py --fold 4 --seeds 0 1 2 --ckpt-dir {LOCAL_CKPT} --num-workers {NUM_WORKERS}
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+for cfg in ("configs/oracle_skip_shuffled.yaml",     # falsify 11d first
+            "configs/pred_noskip.yaml",
+            "configs/pred_skip.yaml",
+            "configs/pred_skip_shuffled.yaml"):
+    t0 = time.time()
+    r = subprocess.run(["python", "scripts/train.py", "--config", cfg,
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[{cfg}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+!python scripts/oracle_headroom.py --results {DRIVE_RESULTS} --fold 4
+"""))
+
+cells.append(md(r"""
 ## 12 — Controlled-misalignment study: PILOT
 
 The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion

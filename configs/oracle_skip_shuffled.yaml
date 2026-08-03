@@ -1,0 +1,56 @@
+# FALSIFICATION CONTROL for oracle_skip. Run this before believing that probe.
+#
+# Identical to `oracle_skip.yaml` in every respect — same oracle transform per
+# pair, same zero fill, same skip path, same augmentation, same fold and seeds —
+# except that the auxiliary image being warped belongs to **another patient**.
+#
+# Why it has to exist. The oracle transform is fitted to the ground-truth masks
+# of both frames, so it encodes where the reference lesion is. Warping by it
+# does two things at once: it places the auxiliary lesion on top of the target,
+# and it stamps a zero-filled border whose silhouette is itself a function of
+# the answer. A decoder handed that at high resolution can localise the lesion
+# without reading one pixel of auxiliary content. The Kvasir pilot was caught by
+# exactly this failure: zero padding let a misaligned condition beat a perfectly
+# registered one by 0.025 Dice at 6.7 standard errors.
+#
+# Holding the transform fixed and swapping only the content separates the two:
+#
+#   oracle_skip - oracle_skip_shuffled  ->  what THIS patient's second modality
+#                                           contributed
+#   oracle_skip_shuffled - oracle_noskip -> what the warp's own geometry gave
+#                                           away, i.e. the artefact
+#
+# If the second quantity is most of the +0.053 headroom, the probe measured
+# padding and the whole aligned-fusion line closes on the spot.
+name: oracle_skip_shuffled
+mode: dual
+reference: random
+
+align_mode: oracle
+aux_fill: zero              # must match oracle_skip exactly, artefact included
+aux_content: shuffled       # the one and only difference
+aux_skips: true
+share_aux_geometry: true
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [4]
+seeds: [0, 1, 2]
