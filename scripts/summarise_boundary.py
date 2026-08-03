@@ -28,8 +28,26 @@ The size trap, restated because it has already cost this project once
 `naive_iou` correlated r = 0.575 with lesion size and was withdrawn from
 correlation work; Dice itself sits at r = 0.562. hd95 is a distance and grows
 with the object, so it is exposed the same way. bf and nsd are fractions of
-contour length and should not be. This script prints the size correlation of
-whichever metric is being read, so that is checked rather than assumed.
+contour length and were expected not to be; measured on this cohort they still
+reach r = 0.44-0.49 at the tightest tolerances, so the expectation was only
+half right and the printed correlation is worth reading.
+
+What that correlation does and does not invalidate: it rules the metric out for
+*correlational* work — relating fusion gain to lesion size, the mistake Fig. 6
+already caught — and it does not touch the paired comparisons here, which match
+arms on the same image, so any size effect common to both cancels.
+
+Status of this axis
+-------------------
+Secondary and post-hoc. The v2 plan deleted the boundary axis and it was
+reinstated after Dice came back flat, which is exactly the shape of a metric
+chosen to fit a result. Three things make it defensible anyway, and all three
+belong in the write-up rather than in a footnote: the demarcation line is the
+*a priori* clinical mechanism claimed for the enhanced modality; the sensitivity
+argument comes from simulation and does not depend on these data; and the effect
+was already visible on Dice in the same frame (+0.0089, p = 0.024), so the
+boundary metric sharpened an existing signal rather than manufacturing one.
+Dice remains the primary endpoint.
 """
 from __future__ import annotations
 
@@ -116,8 +134,11 @@ def main() -> int:
                 n, delta, p = result
                 better = (delta < 0) if metric in LOWER_IS_BETTER else (delta > 0)
                 flag = "dual better" if better else "single better"
+                # n is not decoration: arms that ran on the development fold only
+                # are compared on ~30 images while the five-fold arms use ~150,
+                # and without it those two lines look equally well supported.
                 print(f"     {cfg} - {single}: median {delta:+.4f}  "
-                      f"p = {p:.4f}  [{flag}]")
+                      f"p = {p:.4f}  n = {n:3d}  [{flag}]")
 
             # The lesson from naive_iou: a metric that tracks lesion size cannot
             # carry a comparison between arms that segment different amounts.
