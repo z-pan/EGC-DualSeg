@@ -344,8 +344,16 @@ total_gb = sum(os.path.getsize(f"{LOCAL_CKPT}/{f}")
                for f in os.listdir(LOCAL_CKPT)) / 1e9
 print(f"staged {staged}, already present {skipped}  "
       f"({total_gb:.1f} GB, {time.time()-t0:.0f}s)")
-print("expected 75 checkpoints (5 configs x 5 folds x 3 seeds):",
-      len([f for f in os.listdir(LOCAL_CKPT) if f.endswith('.pt')]))
+
+# The count grows as arms are added, so report the breakdown rather than assert a
+# total that goes stale: 75 from Stage 1 (5 configs x 5 folds x 3 seeds), then 3
+# per probe arm, all of which run on the development fold only.
+from collections import Counter
+names = [f[:-3] for f in os.listdir(LOCAL_CKPT) if f.endswith('.pt')]
+per_config = Counter(n.rsplit('_fold', 1)[0] for n in names)
+print(f"\n{len(names)} checkpoints:")
+for config, n in sorted(per_config.items()):
+    print(f"  {config:22s} {n:3d}")
 """))
 
 cells.append(md(r"""
