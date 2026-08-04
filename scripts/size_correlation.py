@@ -170,7 +170,26 @@ def main() -> int:
 
     print(f"pathological ruler: {len(ruler)} patients with a single-lesion "
           f"specimen measurement, {ruler.min():.1f}-{ruler.max():.1f} mm")
-    print(f"scale filter: {args.scale}\n")
+    print(f"scale filter: {args.scale}")
+
+    # Two ways this comparison could be an artefact rather than a finding, both
+    # checked here rather than assumed away.
+    #
+    # An empty prediction scores a long axis of 0, which is a rank like any
+    # other, so an arm that fails outright on a few images would have its
+    # correlation destroyed for a reason that has nothing to do with size.
+    empties = img[img.long_frac <= 0].groupby("config").size()
+    print(f"\nempty predictions among the scored images: "
+          f"{dict(empties) if len(empties) else 'none'}")
+    #
+    # And a patient with more than one lesion has one specimen measurement that
+    # cannot be attributed to the lesion in the frame. Those are kept in the main
+    # table for comparability with the plan and removed here to show it does not
+    # matter which choice is made.
+    multi = set(manifest[manifest.n_lesions > 1].case)
+    scored = set(img.case)
+    print(f"multifocal patients among them: {len(multi & scored)} "
+          f"(sensitivity check below drops them)\n")
 
     for frame, single in FRAMES.items():
         sub = img[img.ref_modality == frame]
@@ -228,10 +247,25 @@ def main() -> int:
                     contrast(cfg, "ground_truth", f"{cfg} - annotation")
         print()
 
-    print("Trust the bootstrap over Williams' t where they disagree: Williams "
-          "assumes\nbivariate normality that ranks do not satisfy. Neither is a "
-          "substitute for the\nfact that this is one cohort of ~42 measurable "
-          "lesions.")
+    print("=== sensitivity: multifocal patients removed ===")
+    for frame, single in FRAMES.items():
+        sub = img[(img.ref_modality == frame) & (~img.case.isin(multi))]
+        wide = sub.pivot_table(index="case", columns="config", values="long_frac")
+        if single not in wide:
+            continue
+        wide = wide.join(ruler.rename("path_mm"), how="inner")
+        parts = []
+        for cfg in sorted(c for c in wide.columns if c != "path_mm"):
+            pair = wide[["path_mm", cfg]].dropna()
+            if len(pair) >= 6:
+                parts.append(f"{cfg} {spearmanr(pair.path_mm, pair[cfg]).statistic:+.3f}")
+        print(f"  {frame} (n = {len(wide)}):  " + "   ".join(parts))
+
+    print("\nTrust the bootstrap over Williams' t where they disagree: Williams "
+          "assumes\nbivariate normality that ranks do not satisfy. And read the "
+          "confidence interval,\nnot the p value: with 44 lesions this design "
+          "excludes a difference in rho larger\nthan about 0.13, which is not the "
+          "same as excluding a difference.")
     return 0
 
 
