@@ -715,6 +715,46 @@ cells.append(code(r"""
 """))
 
 cells.append(md(r"""
+## 11g — Is it a better model, or a luckier threshold?
+
+The clinical read-out compares arms at a threshold of 0.5, and on the enhanced frame the dual
+model misses **26% less lesion** (0.107 → 0.079 of lesion area, paired p = 0.0003) while taking
+**no more normal tissue** (−0.001, p = 0.64). Both survive a Bonferroni correction over every
+test in that read-out.
+
+There is exactly one objection left, and it is fatal if unanswered: missed lesion and
+over-taken mucosa move in opposite directions as the threshold moves, so **lowering the
+single-modality threshold might buy the same trade**. A single operating point cannot tell a
+better model from a better-placed one.
+
+So sweep the threshold on every arm and ask the operating-point-free question: does the dual
+arm lie **outside** the single arm's whole achievable curve, or on it?
+
+* matched on over-segmentation — at the same cost in healthy tissue, who misses less?
+* matched on missed lesion — to miss as little, how much extra tissue must the baseline take?
+
+Winning both means a better model. Winning neither means the clinical claim has to be
+withdrawn. Winning one means the curves cross and the advantage holds over part of the range
+only — which is a real finding too, just a narrower one.
+
+One inference pass; thresholding a probability map 19 times costs nothing next to it.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+t0 = time.time()
+r = subprocess.run(["python", "scripts/threshold_sweep.py",
+                    "--configs", "configs/wli_only.yaml", "configs/nbi_only.yaml",
+                    "configs/ours.yaml", "configs/early_fusion_wli.yaml",
+                    "configs/early_fusion_nbi.yaml",
+                    "--ckpt-dir", LOCAL_CKPT, "--num-workers", str(NUM_WORKERS)])
+print(f"[sweep] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+!python scripts/summarise_sweep.py --results {DRIVE_RESULTS}
+"""))
+
+cells.append(md(r"""
 ## 12 — Controlled-misalignment study: PILOT
 
 The real cohort gives **one** point on the misalignment-versus-fusion-damage relation (lesion
