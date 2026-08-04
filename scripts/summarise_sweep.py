@@ -125,6 +125,26 @@ def main() -> int:
             print(f"    {tau:6.2f} {r.missed_frac:8.3f} {r.over_ratio:8.3f} "
                   f"{r.dice:8.3f}{mark}")
 
+        # The one comparison that needs no matching at all: an arm whose Dice at
+        # its own operating point exceeds what the baseline reaches at ANY
+        # threshold cannot be explained by threshold placement. It is a weaker
+        # statement than dominating the trade-off curve, and it is immune to the
+        # objection that sinks the fixed-threshold comparisons.
+        best_single = float(curve.dice.max())
+        best_tau = float(curve.dice.idxmax())
+        print(f"\n  best Dice the baseline reaches at any threshold: "
+              f"{best_single:.4f} (tau = {best_tau:.2f})")
+        for cfg in [single] + duals:
+            c = (sub[sub.config == cfg].groupby("threshold").dice.mean())
+            at_half = float(c.loc[c.index[np.isclose(c.index, args.threshold)][0]]) \
+                if any(np.isclose(c.index, args.threshold)) else float("nan")
+            verdict = ""
+            if cfg != single:
+                verdict = ("  <- above the baseline's ceiling"
+                           if at_half > best_single else "  <- within reach of the baseline")
+            print(f"    {cfg:22s} own Dice at {args.threshold} = {at_half:.4f}   "
+                  f"best over sweep = {c.max():.4f}{verdict}")
+
         for dual in duals:
             print(f"\n  --- {dual} at tau = {args.threshold} vs {single} anywhere "
                   f"on its curve ---")
@@ -154,9 +174,20 @@ def main() -> int:
             if a and b:
                 wins = (a["delta"] < 0 and a["p"] < 0.05,
                         b["delta"] < 0 and b["p"] < 0.05)
+                # When both matchings land on the same baseline threshold they are
+                # one comparison read two ways, not two axes, and calling a split
+                # verdict "the curves cross" would overstate it.
+                same_tau = abs(a["tau"] - b["tau"]) < 1e-6
                 if all(wins):
                     print("      => outside the baseline's curve on both axes: "
                           "a better model, not a better threshold")
+                elif any(wins) and same_tau:
+                    print(f"      => both matchings land on the baseline at tau = "
+                          f"{a['tau']:.2f}, so this is ONE comparison, not two.\n"
+                          "         The cohort means are level; what differs is the "
+                          "paired median, i.e.\n         the typical image is better "
+                          "and the tail is worse. For a resection\n         margin the "
+                          "tail is the part that matters, so this is not a claim.")
                 elif any(wins):
                     print("      => wins on one axis only: the curves cross, and the "
                           "advantage holds\n         over part of the range rather "
