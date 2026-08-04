@@ -663,8 +663,11 @@ it now covers the axis the clinical claim actually points at.
 cells.append(code(r"""
 import subprocess, time
 
+# --force because the same pass now also writes the clinical columns (residual
+# margin, over-segmentation, coverage). Masks are not stored, so adding a column
+# means running inference again; there is no cheaper path.
 t0 = time.time()
-r = subprocess.run(["python", "scripts/boundary_metrics.py",
+r = subprocess.run(["python", "scripts/boundary_metrics.py", "--force",
                     "--configs", "configs/wli_only.yaml", "configs/nbi_only.yaml",
                     "configs/ours.yaml", "configs/early_fusion_wli.yaml",
                     "configs/early_fusion_nbi.yaml",
@@ -672,7 +675,7 @@ r = subprocess.run(["python", "scripts/boundary_metrics.py",
 print(f"[main arms] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
 
 # The aligned arms exist on the development fold only.
-r = subprocess.run(["python", "scripts/boundary_metrics.py",
+r = subprocess.run(["python", "scripts/boundary_metrics.py", "--force",
                     "--configs", "configs/pred_skip.yaml", "configs/pred_noskip.yaml",
                     "--folds", "4", "--ckpt-dir", LOCAL_CKPT,
                     "--num-workers", str(NUM_WORKERS)])
@@ -680,6 +683,35 @@ print(f"[aligned arms] exit {r.returncode}", flush=True)
 """))
 cells.append(code(r"""
 !python scripts/summarise_boundary.py --results {DRIVE_RESULTS}
+"""))
+
+cells.append(md(r"""
+### 11f-2 The same error, split the way the clinic splits it
+
+Dice, boundary-F and hd95 charge the same price for a missed pixel of lesion and a wrongly
+taken pixel of normal mucosa. Endoscopic submucosal dissection does not: missed lesion is
+residual disease and a positive margin, while extra margin is healthy mucosa that the
+endoscopist removes deliberately — the lesion is marked several millimetres outside its edge
+before cutting.
+
+How much that symmetry hides, on a synthetic lesion of the cohort's size:
+
+| prediction | Dice | margin needed to cover the lesion | normal tissue taken |
+|---|---|---|---|
+| under-segmented 6 px | 0.777 | **6.4 px** | 0.00× |
+| over-segmented 7 px | 0.793 | **0 px** | 0.52× |
+
+Two nearly identical Dice scores, opposite clinical meaning. So this read-out asks the question
+the procedure asks: **with a k-pixel safety margin added to the model's contour, is the whole
+lesion inside it?** One yes or no per image, compared with McNemar on the images where the arms
+disagree — a number a clinician can act on, unlike a 0.027 change in boundary-F.
+
+Read the larger k. A clinical 3 mm margin is of order 50–100 px on this canvas, so k = 0 asks
+for something the procedure never asks for. And watch the last two rows: coverage bought by
+predicting more of everything is a threshold moved, not a model improved.
+"""))
+cells.append(code(r"""
+!python scripts/summarise_clinical.py --results {DRIVE_RESULTS}
 """))
 
 cells.append(md(r"""

@@ -51,10 +51,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.engine.trainer import RunConfig, build_loaders, build_model  # noqa: E402
 
 TOLERANCES = (1, 2, 3, 5)
+CLINICAL = ["residual_px", "residual_p95_px", "residual_area_frac",
+            "over_depth_p95_px", "over_area_ratio", "fully_covered"]
 FIELDS = (["case", "scale", "ref_modality", "config", "fold", "seed",
            "dice", "hd95", "gt_boundary_px", "pred_boundary_px",
            "gt_area_frac", "pred_area_frac", "content_w", "degenerate"]
-          + [f"bf{t}" for t in TOLERANCES] + [f"nsd{t}" for t in TOLERANCES])
+          + [f"bf{t}" for t in TOLERANCES] + [f"nsd{t}" for t in TOLERANCES]
+          + CLINICAL)
 
 # 4-connectivity: the boundary is the ring of foreground pixels that touch
 # background edge-on. An 8-connected erosion would thin diagonal contours and
@@ -101,6 +104,55 @@ def boundary_scores(pred: np.ndarray, gt: np.ndarray) -> dict:
     return out
 
 
+def clinical_scores(pred: np.ndarray, gt: np.ndarray) -> dict:
+    """Split the error into the two halves the clinic does not treat alike.
+
+    Dice, boundary-F and hd95 are all symmetric: a pixel of lesion missed and a
+    pixel of normal mucosa taken cost the same. In endoscopic submucosal
+    dissection they do not. Missed lesion is residual disease and a positive
+    margin, which means further treatment; extra margin is healthy mucosa
+    removed, which is the accepted price of the procedure — the endoscopist
+    deliberately marks several millimetres outside the lesion before cutting.
+
+    So the useful question is not "how well do the two contours agree" but
+    "would resecting along this prediction, plus the usual safety margin, have
+    taken the whole lesion" — a yes or no per image, and the margin that would
+    have been required is the quantity behind it.
+
+        residual_px         the largest distance from an uncovered lesion pixel
+                            to the predicted mask: exactly the margin that would
+                            have been needed for complete coverage, so
+                            `residual_px <= k` IS adequacy at a k-pixel margin
+        residual_p95_px     the same at the 95th percentile, for when one stray
+                            component should not speak for the image
+        residual_area_frac  missed lesion as a share of the lesion
+        over_depth_p95_px   how far beyond the lesion the over-call reaches
+        over_area_ratio     normal tissue taken, as a multiple of lesion area
+        fully_covered       1 when nothing is missed at all
+
+    The ground truth is still the SAM-derived mask, so this does not escape the
+    annotation — but coverage is far less exposed to it than a boundary metric
+    is, because it asks whether a region is enclosed rather than whether two
+    contours have the same shape.
+    """
+    out = {k: float("nan") for k in CLINICAL}
+    if not gt.any() or not pred.any():
+        out["fully_covered"] = 0.0
+        return out
+
+    fn, fp = gt & ~pred, pred & ~gt
+    d_to_pred = distance_transform_edt(~pred)
+    d_to_gt = distance_transform_edt(~gt)
+
+    out["residual_px"] = float(d_to_pred[fn].max()) if fn.any() else 0.0
+    out["residual_p95_px"] = float(np.percentile(d_to_pred[fn], 95)) if fn.any() else 0.0
+    out["residual_area_frac"] = float(fn.sum() / gt.sum())
+    out["over_depth_p95_px"] = float(np.percentile(d_to_gt[fp], 95)) if fp.any() else 0.0
+    out["over_area_ratio"] = float(fp.sum() / gt.sum())
+    out["fully_covered"] = float(not fn.any())
+    return out
+
+
 @torch.no_grad()
 def score_run(cfg: RunConfig, device: torch.device) -> list[dict]:
     tag = f"{cfg.name}_fold{cfg.fold}_seed{cfg.seed}"
@@ -135,6 +187,7 @@ def score_run(cfg: RunConfig, device: torch.device) -> list[dict]:
                        gt_area_frac=float(g.mean()), pred_area_frac=float(p.mean()),
                        content_w=int(batch["content_w"][i]))
             row.update(boundary_scores(p, g))
+            row.update(clinical_scores(p, g))
             rows.append(row)
     del model
     if device.type == "cuda":
