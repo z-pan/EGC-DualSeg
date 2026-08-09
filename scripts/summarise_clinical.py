@@ -54,6 +54,10 @@ from scipy.stats import binomtest, wilcoxon
 
 KEY = ["case", "scale", "ref_modality"]
 FRAMES = {"WLI": "wli_only", "NBI": "nbi_only"}
+# Operator against operator: both dual-modality, same folds, same augmentation,
+# same trunk, differing only in how the two frames are combined.
+NAIVE = {"WLI": "early_fusion_wli", "NBI": "early_fusion_nbi"}
+PROPOSED = "ours"
 DEFAULT_MARGINS = [0, 5, 10, 20, 40]
 
 
@@ -124,18 +128,23 @@ def main() -> int:
             cells = "".join(f"{100 * (col <= k).mean():5.1f}%  " for k in args.margins)
             print(f"     {cfg:22s}{cells}")
 
-        for cfg in duals:
-            pair = wide_res[[cfg, single]].dropna()
+        naive = NAIVE.get(frame)
+        contrasts = [(cfg, single) for cfg in duals]
+        if naive and {PROPOSED, naive} <= set(sub.config):
+            contrasts.append((PROPOSED, naive))
+        for cfg, base in contrasts:
+            pair = wide_res[[cfg, base]].dropna()
             if pair.empty:
                 continue
             line = []
             for k in args.margins:
                 b, c, p = mcnemar((pair[cfg] <= k).to_numpy().astype(int),
-                                  (pair[single] <= k).to_numpy().astype(int))
-                delta = 100 * ((pair[cfg] <= k).mean() - (pair[single] <= k).mean())
+                                  (pair[base] <= k).to_numpy().astype(int))
+                delta = 100 * ((pair[cfg] <= k).mean() - (pair[base] <= k).mean())
                 star = "*" if p < 0.05 else " "
                 line.append(f"k={k}: {delta:+5.1f}pp (+{b}/-{c}, p={p:.3f}){star}")
-            print(f"\n     {cfg} - {single}, n = {len(pair)}")
+            tag = "   <-- fusion operator" if base == naive else ""
+            print(f"\n     {cfg} - {base}, n = {len(pair)}{tag}")
             for entry in line:
                 print(f"       {entry}")
 
@@ -148,15 +157,18 @@ def main() -> int:
             medians = "   ".join(f"{c}={wide[c].median():.3f}"
                                  for c in [single] + duals if c in wide)
             print(f"     {label:28s} {medians}")
-            for cfg in duals:
-                pair = wide[[cfg, single]].dropna()
+            for cfg, base in contrasts:
+                if cfg not in wide or base not in wide:
+                    continue
+                pair = wide[[cfg, base]].dropna()
                 if len(pair) < 5:
                     continue
-                delta = float((pair[cfg] - pair[single]).median())
-                p = wilcoxon_p(pair[cfg].to_numpy(), pair[single].to_numpy())
+                delta = float((pair[cfg] - pair[base]).median())
+                p = wilcoxon_p(pair[cfg].to_numpy(), pair[base].to_numpy())
                 star = "*" if p < 0.05 else " "
-                print(f"       {cfg} - {single}: median {delta:+.3f}  "
-                      f"p = {p:.4f}  n = {len(pair)}{star}")
+                tag = "   <-- fusion operator" if base == naive else ""
+                print(f"       {cfg} - {base}: median {delta:+.3f}  "
+                      f"p = {p:.4f}  n = {len(pair)}{star}{tag}")
 
     print("\n" + "=" * 72)
     print("Read adequacy at the larger k: a 3 mm clinical margin is of order 50-100 px\n"

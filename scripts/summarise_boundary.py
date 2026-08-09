@@ -61,6 +61,13 @@ from scipy.stats import wilcoxon
 
 KEY = ["case", "scale", "ref_modality"]
 FRAMES = {"WLI": "wli_only", "NBI": "nbi_only"}
+# The comparison that isolates the fusion operator. Both arms are dual-modality
+# and share folds, augmentation, trunk and training budget, so their difference
+# is the operator and nothing else — which a contrast against the
+# single-modality baseline cannot deliver, since that one also changes the
+# number of inputs.
+NAIVE = {"WLI": "early_fusion_wli", "NBI": "early_fusion_nbi"}
+PROPOSED = "ours"
 # Higher is better for every metric except hd95.
 LOWER_IS_BETTER = {"hd95"}
 DEFAULT_METRICS = ["dice", "hd95", "bf1", "bf2", "bf3", "bf5", "nsd3"]
@@ -139,6 +146,17 @@ def main() -> int:
                 # and without it those two lines look equally well supported.
                 print(f"     {cfg} - {single}: median {delta:+.4f}  "
                       f"p = {p:.4f}  n = {n:3d}  [{flag}]")
+
+            # Operator against operator, on the same axis.
+            naive = NAIVE.get(frame)
+            if naive and {PROPOSED, naive} <= set(per_image.config):
+                result = paired(per_image, PROPOSED, naive, metric)
+                if result is not None:
+                    n, delta, p = result
+                    better = (delta < 0) if metric in LOWER_IS_BETTER else (delta > 0)
+                    flag = "proposed better" if better else "naive better"
+                    print(f"     {PROPOSED} - {naive}: median {delta:+.4f}  "
+                          f"p = {p:.4f}  n = {n:3d}  [{flag}]   <-- fusion operator")
 
             # The lesson from naive_iou: a metric that tracks lesion size cannot
             # carry a comparison between arms that segment different amounts.
