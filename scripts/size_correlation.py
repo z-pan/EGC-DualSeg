@@ -235,11 +235,20 @@ def main() -> int:
             if cfg not in (single, "ground_truth") and cfg in rho:
                 contrast(cfg, single, f"{cfg} - {single}")
 
-        # The comparison that the ceiling row makes possible, and the one that
-        # matters most given how these labels were made: does a model trained on
-        # the SAM masks track the specimen better than those masks do? A model
-        # cannot learn tissue truth that its target lacks, but it can average out
-        # per-image annotation noise, and that would show up exactly here.
+        # Method against method. Both arms are dual-modality, trained on the same
+        # folds with the same augmentation, and differ only in how the two frames
+        # are combined — so this isolates the fusion operator itself, which the
+        # single-modality baseline cannot. On an endpoint that owes nothing to
+        # the annotation, it is the cleanest statement the design supports.
+        early = next((c for c in arms if c.startswith("early_fusion")), None)
+        proposed = "ours" if "ours" in arms else None
+        if early and proposed:
+            print(f"\n  proposed fusion vs naive early fusion (method against method):")
+            contrast(proposed, early, f"{proposed} - {early}")
+
+        # And against the annotation: a model cannot learn tissue truth its target
+        # lacks, but it can average out per-image annotation noise, which would
+        # show up here.
         if "ground_truth" in rho:
             print(f"\n  against the annotation itself (exploratory):")
             for cfg in sorted(arms):
