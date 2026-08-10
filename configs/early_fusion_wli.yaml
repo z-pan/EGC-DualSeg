@@ -1,6 +1,14 @@
-# Straw-man: resize-and-concatenate the two frames into a 6-channel input.
-# This is exactly the pixel-correspondence assumption the measured IoU of 0.279
-# says does not hold, so it is expected to underperform the single-modality model.
+# Input-level fusion: resize and concatenate the two frames into a 6-channel
+# input. This is the most widely used way to fuse two co-acquired frames, and it
+# assumes correspondence at full pixel resolution — precisely the assumption the
+# measured overlap between the two views says does not hold here. The arm is
+# therefore a test of that assumption, and it is expected to underperform the
+# single-modality model.
+#
+# It is the weakest rung of the operator ladder by construction, so it is not on
+# its own sufficient evidence that the fusion operator matters. See
+# docs/baseline_arms.md for the mid-level and parameter-matched arms that carry
+# that comparison.
 name: early_fusion_wli
 mode: early
 reference: WLI

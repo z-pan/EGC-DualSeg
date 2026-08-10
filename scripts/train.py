@@ -4,6 +4,8 @@
     python scripts/train.py --config configs/ours.yaml
     python scripts/train.py --config configs/ours.yaml --folds 0 --seeds 0 --epochs 3
     python scripts/train.py --config configs/wli_only.yaml --resume-fold 2
+    python scripts/train.py --config configs/mmd_fusion.yaml --mmd-weight 0.1 \
+        --name mmdcal_0.1 --folds 0 --seeds 0 --epochs 12
 
 Every (config, fold, seed) writes results/predictions_{name}_fold{f}_seed{s}.csv.
 A run whose prediction CSV already exists is skipped, so an interrupted Colab
@@ -41,6 +43,14 @@ def main() -> int:
     ap.add_argument("--name", default=None)
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--ckpt-dir", default=None)
+    # Operator-arm overrides, so the MMD weight can be calibrated and the
+    # mid-fusion width can be matched without a yaml per value. Give each run a
+    # distinct --name: a run whose prediction CSV already exists is skipped, so
+    # two weights sharing a name would silently return the first one's result.
+    ap.add_argument("--mmd-weight", type=float, default=None,
+                    help="override mmd_weight; 0 disables the alignment term")
+    ap.add_argument("--mid-ffn-mult", type=float, default=None,
+                    help="override mid_ffn_mult; 0 is the un-widened operator")
     args = ap.parse_args()
 
     with open(args.config, encoding="utf-8") as fh:
@@ -51,7 +61,7 @@ def main() -> int:
     raw.pop("seeds", None)
 
     for key in ("epochs", "batch_size", "num_workers", "npz", "manifest", "name",
-                "out_dir", "ckpt_dir"):
+                "out_dir", "ckpt_dir", "mmd_weight", "mid_ffn_mult"):
         value = getattr(args, key)
         if value is not None:
             raw[key] = value

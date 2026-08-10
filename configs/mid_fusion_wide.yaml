@@ -1,0 +1,42 @@
+# mid_fusion.yaml with the operator widened until its parameter count matches
+# the cross-attention arm. Measured with pretrained=False:
+#
+#   ours (cross-attention)   26,940,434
+#   mid_fusion_wide          26,936,082    gap 4,352  (0.016%)
+#   mid_fusion               25,097,746    gap 1.84M  (6.8%)
+#
+# Why it exists: without it, "the proposed operator beats concatenation" is open
+# to the reply "you added 1.8M parameters". With it, the two arms have the same
+# data, folds, seeds, schedule, optimiser, augmentation, auxiliary levels AND
+# parameter budget, and differ only in how the two streams are combined.
+#
+# mid_ffn_mult was solved for to match the count. It was NOT tuned for accuracy,
+# and must not be — tuning it would reintroduce the asymmetry this arm removes.
+# Report the three counts above so the matching is auditable.
+name: mid_fusion_wide
+mode: mid
+reference: random
+mid_ffn_mult: 3.5
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [0, 1, 2, 3, 4]
+seeds: [0, 1, 2]

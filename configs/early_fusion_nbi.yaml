@@ -1,3 +1,5 @@
+# Input-level fusion with NBI as the reference frame. See early_fusion_wli.yaml
+# for what this arm tests and docs/baseline_arms.md for the stronger fusion arms.
 name: early_fusion_nbi
 mode: early
 reference: NBI

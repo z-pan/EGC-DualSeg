@@ -115,6 +115,67 @@ class CrossAttentionFusion(nn.Module):
         return q.transpose(1, 2).reshape(b, c, h, w)
 
 
+class MidConcatFusion(nn.Module):
+    """Concatenate the auxiliary features onto the reference bottleneck.
+
+    The missing rung between the two operators already in the paper. Early fusion
+    stacks the two frames at the input and so assumes correspondence at full
+    pixel resolution; cross-attention assumes none at all. This assumes it at the
+    1/32 grid — 12x12 cells over a 384px frame, each roughly 32px across — which
+    is the standard "fuse at the bottleneck" answer and the one a reader will ask
+    about. Whether a coarse spatial assumption survives the measured misalignment
+    is exactly the question the three-rung ladder answers.
+
+    The auxiliary stream contributes the SAME levels the cross-attention operator
+    gets (aux_levels, default 1/16 and 1/32), average-pooled onto the bottleneck
+    grid. Anything less and the comparison would confound the operator with the
+    information it is given, which is the one thing this arm exists to avoid.
+
+    `ffn_mult` widens the operator without changing what it assumes. It exists
+    for one purpose: the cross-attention operator carries about 1.8M more
+    parameters than plain concatenation, and a referee is entitled to ask
+    whether the difference is the operator or the budget. Setting `ffn_mult` so
+    the two land within a percent of each other answers that directly. The value
+    is chosen to match parameter counts, NOT tuned for accuracy — tuning it
+    would reintroduce exactly the asymmetry it is there to remove.
+    """
+
+    def __init__(self, dim: int = 512, aux_dims: tuple[int, ...] = (256, 512),
+                 n_modalities: int = 2, ffn_mult: float = 0.0):
+        super().__init__()
+        # Mirrors CrossAttentionFusion: the role embedding is what lets one model
+        # serve both fusion directions, so both operators must have it or the
+        # comparison silently becomes one-model-vs-two.
+        self.role = nn.Embedding(n_modalities, dim)
+        nn.init.zeros_(self.role.weight)
+        self.proj = nn.Sequential(
+            nn.Conv2d(dim + sum(aux_dims), dim, 1, bias=False),
+            nn.BatchNorm2d(dim), nn.ReLU(inplace=True))
+        if ffn_mult:
+            hidden = int(round(dim * ffn_mult))
+            # GroupNorm(1, C) rather than LayerNorm so the block stays in NCHW
+            # and no transposes are introduced that the plain variant lacks.
+            self.ffn = nn.Sequential(
+                nn.GroupNorm(1, dim), nn.Conv2d(dim, hidden, 1), nn.GELU(),
+                nn.Conv2d(hidden, dim, 1))
+        else:
+            self.ffn = None
+        # Same identity-at-init discipline as the cross-attention gate, so
+        # neither operator gets a head start from its initialisation.
+        self.gate = nn.Parameter(torch.zeros(1))
+
+    def forward(self, ref_feat: torch.Tensor, aux_feats: list[torch.Tensor],
+                ref_id: torch.Tensor) -> torch.Tensor:
+        h, w = ref_feat.shape[-2:]
+        pooled = [a if a.shape[-2:] == (h, w)
+                  else F.adaptive_avg_pool2d(a, (h, w)) for a in aux_feats]
+        x = ref_feat + self.role(ref_id)[:, :, None, None]
+        fused = self.proj(torch.cat([x] + pooled, dim=1))
+        if self.ffn is not None:
+            fused = fused + self.ffn(fused)
+        return ref_feat + torch.tanh(self.gate) * fused
+
+
 # ---------------------------------------------------------------------------
 class DecoderBlock(nn.Module):
     def __init__(self, in_ch: int, skip_ch: int, out_ch: int):
@@ -182,14 +243,21 @@ class UNetDecoder(nn.Module):
 
 # ---------------------------------------------------------------------------
 class EGCNet(nn.Module):
-    """mode: 'single' | 'early' | 'dual'."""
+    """mode: 'single' | 'early' | 'dual' | 'mid'.
+
+    'dual' and 'mid' are the two dual-stream arms. They share the encoder, the
+    decoder, the auxiliary levels and the role embedding, and differ only in the
+    operator that combines the two streams at the bottleneck.
+    """
+
+    DUAL_STREAM = {"dual", "mid"}
 
     def __init__(self, mode: str = "dual", pretrained: bool = True,
                  heads: int = 8, dropout: float = 0.1,
                  use_role_embedding: bool = True, aux_levels: tuple[int, ...] = (3, 4),
-                 aux_skips: bool = False):
+                 aux_skips: bool = False, mid_ffn_mult: float = 0.0):
         super().__init__()
-        assert mode in {"single", "early", "dual"}
+        assert mode in {"single", "early", "dual", "mid"}
         if aux_skips and mode != "dual":
             raise ValueError("aux_skips needs a separate auxiliary stream (mode='dual')")
         self.mode = mode
@@ -200,10 +268,13 @@ class EGCNet(nn.Module):
         in_ch = 6 if mode == "early" else 3
         self.encoder = SharedEncoder(in_channels=in_ch, pretrained=pretrained)
         self.decoder = UNetDecoder(aux_skips=aux_skips)
+        dims = tuple(SharedEncoder.STAGE_CHANNELS[i] for i in aux_levels)
         if mode == "dual":
-            dims = tuple(SharedEncoder.STAGE_CHANNELS[i] for i in aux_levels)
             self.fusion = CrossAttentionFusion(dim=512, aux_dims=dims,
                                                heads=heads, dropout=dropout)
+        elif mode == "mid":
+            self.fusion = MidConcatFusion(dim=512, aux_dims=dims,
+                                          ffn_mult=mid_ffn_mult)
         else:
             self.fusion = None
 
@@ -218,12 +289,19 @@ class EGCNet(nn.Module):
         bottleneck = feats[-1]
 
         aux_feats_all = None
-        if self.mode == "dual":
-            assert aux is not None, "dual mode requires the auxiliary frame"
+        out: dict = {}
+        if self.mode in self.DUAL_STREAM:
+            assert aux is not None, f"{self.mode} mode requires the auxiliary frame"
             aux_id = 1 - ref_id
             aux_feats_all = self.encoder(aux, aux_id)
             aux_feats = [aux_feats_all[i] for i in self.aux_levels]
             role = ref_id if self.use_role_embedding else torch.zeros_like(ref_id)
+            # Pre-fusion global descriptors, exposed so a distribution-alignment
+            # loss can be applied between the two streams. Taken BEFORE fusion:
+            # aligning post-fusion features would compare a mixture against one
+            # of its own ingredients.
+            out["ref_global"] = feats[-1].mean(dim=(2, 3))
+            out["aux_global"] = aux_feats_all[-1].mean(dim=(2, 3))
             bottleneck = self.fusion(bottleneck, aux_feats, role)
 
         logits = self.decoder(feats, bottleneck,
@@ -231,7 +309,8 @@ class EGCNet(nn.Module):
         if logits.shape[-2:] != ref.shape[-2:]:
             logits = F.interpolate(logits, size=ref.shape[-2:],
                                    mode="bilinear", align_corners=False)
-        return {"logits": logits, "embedding": bottleneck}
+        out.update(logits=logits, embedding=bottleneck)
+        return out
 
 
 class GradeHead(nn.Module):

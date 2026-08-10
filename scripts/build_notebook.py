@@ -251,6 +251,10 @@ cell after a disconnect resumes the queue. A failing config does not abort the r
 
 Ablations are in the **same** queue rather than deferred — after 8/20 there is no Pro+ runtime
 to come back to.
+
+The three fusion arms added on 2026-08-10 are **not** in this queue; they have their own,
+self-contained, in section 13. The completion matrix in section 9 therefore covers this queue
+only, and section 13 carries its own.
 """))
 cells.append(code(r"""
 CONFIGS = [
@@ -879,6 +883,246 @@ if "ours_S_iou028" in rows and "early_S_iou028" in rows:
 """))
 
 cells.append(md(r"""
+## 13 — Added fusion arms: the operator ladder
+
+Added 2026-08-10, after everything above had finished. It closes one gap, and it
+is the gap a referee opens first.
+
+Every fusion comparison so far has been *proposed operator versus input-level
+concatenation*. That is the weakest possible opponent — it assumes correspondence
+at full pixel resolution, which the measured overlap between the two frames says
+does not hold, so it was always expected to lose. Winning against it does not
+establish that the **operator** is what matters.
+
+Three arms close it. Each differs from its neighbour by exactly one thing:
+
+| arm | operator | assumes correspondence at | differs from |
+|---|---|---|---|
+| `early_fusion_*` | 6-channel input | every pixel | — |
+| `mid_fusion` | concat at the bottleneck, 1x1 conv | the 1/32 grid (~32 px cells) | `ours`: operator |
+| `mid_fusion_wide` | the same, widened to match parameters | the 1/32 grid | `mid_fusion`: width |
+| `mmd_fusion` | concat + MMD distribution alignment | marginals only, not pairing | `mid_fusion`: one loss term |
+| `ours` | registration-free cross-attention | nothing | — |
+
+Parameter counts, `pretrained=False`:
+
+```
+single            24,437,394     mid_fusion        25,097,746
+early_fusion_*    24,449,745     mid_fusion_wide   26,936,082
+ours              26,940,434                        (-0.016% vs ours)
+```
+
+`mid_fusion_wide` is the arm that carries the claim — it is the only one that
+holds data, folds, seeds, schedule, augmentation, auxiliary levels **and**
+parameter budget fixed. `mid_fusion` stays so the effect of width alone is
+visible rather than assumed away.
+
+`mmd_fusion` reproduces the distribution-alignment term of the published WLI/NBI
+fusion line (Wu et al., Med Image Anal 2026 — the method Jie et al. 2026
+abbreviate ADFNet). It is that term alone, not their network, and must be
+reported that way. What it tests here: MMD is a two-sample statistic over the
+batch and is invariant to which WLI frame was paired with which NBI frame, so if
+it helps, aligning the modalities as populations is enough; if it does not, the
+pairing carries something no marginal alignment recovers.
+
+**These arms were added after the main results were seen.** Methods 2.7 states
+the decision criteria were fixed in advance. Disclose them as added for
+completeness of the operator ladder and include them in the multiple-comparison
+correction — do not present them alongside the pre-specified arms as though they
+had been planned.
+
+This section is self-contained: it trains the new arms and runs their own
+boundary and sweep passes, so nothing that already completed above needs
+re-running.
+"""))
+
+cells.append(md(r"""
+### 13.1 Calibrate the MMD weight — before the sweep, not after
+
+A loss weight is not portable across architectures. It is only meaningful
+relative to the scale of the features it is computed on and of the objective it
+is added to. The original authors report 1e-4; measured here, the raw MMD term
+is ~0.033 against a Dice+BCE loss of ~1.24, so 1e-4 contributes ~3e-6 —
+numerically dead. Sweeping at that value would return "no different from plain
+concatenation" for a reason that has nothing to do with the method, and a
+referee who knows the source paper would be right to reject that.
+
+What to reproduce is the term's **relative influence**, not its literal value.
+
+Development fold only. Every hyperparameter in this project is chosen on fold 4
+and then frozen (section 7); a baseline's hyperparameter does not get a looser
+rule than the proposed method's.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+MMD_WEIGHTS = [0.0001, 0.01, 0.1, 0.3, 1.0]
+CAL_RESULTS = f"{DRIVE_RESULTS}/_mmdcal"
+
+for w in MMD_WEIGHTS:
+    t0 = time.time()
+    # Distinct --name per weight: a run whose prediction CSV exists is skipped,
+    # so a shared name would silently return the first weight's result for all.
+    r = subprocess.run(["python", "scripts/train.py",
+                        "--config", "configs/mmd_fusion.yaml",
+                        "--mmd-weight", str(w), "--name", f"mmdcal_{w}",
+                        "--folds", str(DEV_FOLD), "--seeds", "0", "--epochs", "12",
+                        "--out-dir", CAL_RESULTS,
+                        "--ckpt-dir", f"{DRIVE_CHECKPOINTS}/_mmdcal",
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[w={w}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+# Read-out: pick the weight whose share of the objective is ~1-5% and whose
+# validation Dice has not collapsed.
+import glob, os, pandas as pd
+
+rows = []
+for p in sorted(glob.glob(f"{CAL_RESULTS}/logs/mmdcal_*.csv")):
+    w = float(os.path.basename(p).split("_")[1].rsplit("_fold", 1)[0])
+    d = pd.read_csv(p)
+    raw = d.train_mmd.iloc[-1]
+    rows.append(dict(weight=w, mmd_raw=round(raw, 4),
+                     contribution=round(w * raw, 6),
+                     loss=round(d.train_loss.iloc[-1], 4),
+                     share_pct=round(100 * w * raw / d.train_loss.iloc[-1], 2),
+                     best_dice=round(d.val_dice.max(), 4)))
+print(pd.DataFrame(rows).sort_values("weight").to_string(index=False))
+print("\nPick share_pct in roughly 1-5% with best_dice intact, then set")
+print("mmd_weight in configs/mmd_fusion.yaml (or pass --mmd-weight below).")
+print("Report BOTH the chosen weight and the published 1e-4, and why 1e-4 was not used.")
+"""))
+
+cells.append(md(r"""
+### 13.2 Train the three arms
+
+Same queue discipline as section 8: sequential, idempotent, a failing config does
+not abort the rest. 45 runs (3 arms x 5 folds x 3 seeds).
+
+Set `MMD_WEIGHT` from 13.1 before running. Leaving it `None` uses whatever is in
+the yaml.
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+MMD_WEIGHT = None      # <- set from 13.1, e.g. 0.1
+
+NEW_ARMS = [
+    "configs/mid_fusion.yaml",
+    "configs/mid_fusion_wide.yaml",
+    "configs/mmd_fusion.yaml",
+]
+FOLDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1, 2]
+
+for cfg in NEW_ARMS:
+    print(f"\n{'='*70}\n{cfg}\n{'='*70}", flush=True)
+    t0 = time.time()
+    cmd = ["python", "scripts/train.py", "--config", cfg,
+           "--folds", *map(str, FOLDS), "--seeds", *map(str, SEEDS),
+           "--num-workers", str(NUM_WORKERS)]
+    if MMD_WEIGHT is not None and cfg.endswith("mmd_fusion.yaml"):
+        cmd += ["--mmd-weight", str(MMD_WEIGHT)]
+    r = subprocess.run(cmd)
+    print(f"[{cfg}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+# Completion matrix for the new arms only. Section 9 covers the original queue.
+import itertools, os, pandas as pd
+
+new_names = [os.path.splitext(os.path.basename(c))[0] for c in NEW_ARMS]
+rows = []
+for name, fold in itertools.product(new_names, FOLDS):
+    have = sum(os.path.exists(f"{DRIVE_RESULTS}/predictions_{name}_fold{fold}_seed{s}.csv")
+               for s in SEEDS)
+    rows.append(dict(config=name, fold=fold, seeds_done=have, expected=len(SEEDS)))
+print(pd.DataFrame(rows).pivot(index="config", columns="fold",
+                               values="seeds_done").to_string())
+missing = [r for r in rows if r["seeds_done"] < r["expected"]]
+print(f"\n{len(rows)-len(missing)}/{len(rows)} (config, fold) cells complete")
+for m in missing:
+    print(f"  MISSING {m['config']} fold {m['fold']}: {m['seeds_done']}/{m['expected']}")
+"""))
+
+cells.append(md(r"""
+### 13.3 Boundary and threshold passes for the new arms
+
+Sections 11f and 11g ran these for the original arms. The masks were never
+stored, so adding an arm means running inference again — there is no cheaper
+path. Only the new configs are passed, so the existing CSVs are untouched and
+`--force` is not needed.
+"""))
+cells.append(code(r"""
+# Both passes reopen checkpoints, and 10.0 staged whatever existed when it ran.
+# If the new arms were trained in a later session their weights are on Drive but
+# not on local SSD, and the passes would run at Drive speed or fail outright.
+# Check first rather than discover it an hour in.
+import os
+need = [f"{n}_fold{f}_seed{s}.pt" for n in new_names for f in FOLDS for s in SEEDS]
+absent = [n for n in need if not os.path.exists(f"{LOCAL_CKPT}/{n}")]
+print(f"{len(need)-len(absent)}/{len(need)} new-arm checkpoints staged locally")
+if absent:
+    print("re-run section 10.0 first; missing e.g.", absent[:3])
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+t0 = time.time()
+r = subprocess.run(["python", "scripts/boundary_metrics.py",
+                    "--configs", *NEW_ARMS,
+                    "--ckpt-dir", LOCAL_CKPT, "--num-workers", str(NUM_WORKERS)])
+print(f"[boundary] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+
+t0 = time.time()
+r = subprocess.run(["python", "scripts/threshold_sweep.py",
+                    "--configs", *NEW_ARMS,
+                    "--ckpt-dir", LOCAL_CKPT, "--num-workers", str(NUM_WORKERS)])
+print(f"[sweep] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+# The summarise scripts glob results/, so the new arms appear without edits.
+!python scripts/summarise.py           --results {DRIVE_RESULTS}
+!python scripts/summarise_boundary.py  --results {DRIVE_RESULTS}
+!python scripts/summarise_clinical.py  --results {DRIVE_RESULTS}
+!python scripts/summarise_sweep.py     --results {DRIVE_RESULTS}
+"""))
+
+cells.append(md(r"""
+### 13.4 What is NOT automatic
+
+**The figures.** `figures/fig2_fusion_operator.py` and
+`figures/fig3_dual_vs_single.py` each carry a hard-coded `STYLE` dict with
+exactly two configurations. Adding arms means allocating further fills and line
+styles **inside the existing frame colours** — blue and teal encode frame
+identity and nothing else, red is reserved for reference lines, and a third hue
+would break the palette discipline both figures are built on.
+
+**The export.** Section 11c bundles `grade_late_*` CSVs only. The new arms write
+`predictions_*`, `boundary_*` and `sweep_*`; bundle those too before the runtime
+goes away, and commit them from the local clone where `results/` is a real
+directory.
+"""))
+cells.append(code(r"""
+import glob, os, shutil
+
+stage = "/content/new_arm_csvs"
+shutil.rmtree(stage, ignore_errors=True)
+os.makedirs(stage)
+
+paths = []
+for name in new_names:
+    for kind in ("predictions", "boundary", "sweep"):
+        paths += glob.glob(f"{DRIVE_RESULTS}/{kind}_{name}_fold*_seed*.csv")
+for p in sorted(set(paths)):
+    shutil.copy(p, stage)
+
+shutil.make_archive(f"{DRIVE_ROOT}/new_arm_csvs", "zip", stage)
+print(f"{len(set(paths))} files -> {DRIVE_ROOT}/new_arm_csvs.zip")
+print(f"expected {3*3*len(FOLDS)*len(SEEDS)} "
+      f"(3 arms x 3 CSV kinds x {len(FOLDS)} folds x {len(SEEDS)} seeds)")
+"""))
+
+cells.append(md(r"""
 ## 8/17 archive checklist
 
 - [ ] every prediction CSV and grade CSV committed to the repository — **from the local clone,
@@ -891,6 +1135,11 @@ cells.append(md(r"""
 - [ ] training logs exported
 - [ ] figures regenerate locally from CSVs alone, with no GPU
 - [ ] `summarise.py` and `summarise_grade.py` both run offline against the committed CSVs
+- [ ] **the three added arms (§13)**: `predictions_`, `boundary_` and `sweep_` CSVs for
+  `mid_fusion`, `mid_fusion_wide` and `mmd_fusion`, all 5 folds x 3 seeds (§13.4 bundles them)
+- [ ] the chosen MMD weight recorded in `configs/mmd_fusion.yaml`, and the calibration
+  logs under `results/_mmdcal/logs/` exported — the choice has to be auditable
+- [ ] `docs/baseline_arms.md` reflects the weight actually used
 """))
 
 nb = {"cells": cells,

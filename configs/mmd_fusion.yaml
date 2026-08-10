@@ -1,0 +1,57 @@
+# Distribution-alignment ablation, after Wu et al. (Med Image Anal 2026) — the
+# method Jie et al. (arXiv:2607.26395) abbreviate ADFNet. That line aligns the
+# two modalities by minimising the Maximum Mean Discrepancy between their global
+# feature distributions before fusing.
+#
+# This arm is mid_fusion.yaml with that one term switched on and NOTHING else
+# changed, so `mmd_fusion - mid_fusion` isolates the alignment term exactly.
+#
+# What it is NOT: a reproduction of Wu et al.'s network, which also carries
+# progressive disentanglement and disentangle-aware contrastive learning. Report
+# this as "concatenation fusion with an MMD distribution-alignment term (after
+# Wu et al.)" and never under their method's name.
+#
+# What this cohort can test with it: MMD is a two-sample statistic over the
+# batch, invariant to which WLI frame was paired with which NBI frame. If it
+# helps here, alignment as a population statistic is enough; if it does not, the
+# pairing carries information no marginal alignment recovers.
+#
+# On the weight. The original authors report 1e-4, but a loss weight is not
+# portable across architectures: it is only meaningful relative to the scale of
+# the features it is computed on and of the objective it is added to. Measured
+# here on fold 0, the raw MMD term is ~0.03 against a Dice+BCE loss of ~1.24, so
+# 1e-4 contributes ~3e-6 — numerically dead. Running the sweep at that value
+# would produce "no difference from plain concatenation" for a reason that has
+# nothing to do with the method.
+#
+# What to reproduce is the term's relative influence, not its literal value.
+# Calibrate first (see docs/baseline_arms.md), then set the weight so the term
+# is worth roughly 1-5% of the objective, and report BOTH the calibrated weight
+# and the authors' 1e-4 so the choice is auditable.
+name: mmd_fusion
+mode: mid
+reference: random
+mmd_weight: 0.3       # <-- calibrated on fold 0 / seed 0; re-check before the sweep
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [0, 1, 2, 3, 4]
+seeds: [0, 1, 2]

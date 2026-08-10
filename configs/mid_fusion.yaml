@@ -1,0 +1,36 @@
+# The missing rung. Early fusion assumes pixel-level correspondence; the proposed
+# operator assumes none. This assumes it at the 1/32 grid, which is the standard
+# "just concatenate at the bottleneck" answer and the first thing a reader will
+# ask about. It also separates the two explanations offered for early fusion's
+# failure: this arm leaves conv1 and its ImageNet weights untouched, so if it
+# still fails, dilution is not the whole story.
+#
+# Everything below is copied from ours.yaml unchanged. Fold assignment, seeds,
+# schedule, optimiser and augmentation are identical, and the auxiliary stream
+# supplies the same two pyramid levels. The fusion operator is the only difference.
+name: mid_fusion
+mode: mid
+reference: random
+
+npz: data/packaged/egc_dualseg_384.npz
+manifest: data/packaged/manifest.csv
+folds: configs/folds.csv
+out_dir: results
+ckpt_dir: checkpoints
+
+epochs: 80
+patience: 15
+batch_size: 8
+lr: 3.0e-4
+backbone_lr: 1.0e-4
+weight_decay: 1.0e-4
+num_workers: 2
+amp: true
+pretrained: true
+
+use_role_embedding: true
+aux_levels: [3, 4]
+init_from: ""
+
+folds_to_run: [0, 1, 2, 3, 4]
+seeds: [0, 1, 2]

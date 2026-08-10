@@ -73,7 +73,9 @@ class EGCPairDataset(Dataset):
         """
         fold         : index of the held-out fold
         split        : 'train' (all other folds) or 'val' (this fold)
-        mode         : 'single' | 'early' | 'dual'
+        mode         : 'single' | 'early' | 'dual' | 'mid'
+                       'mid' feeds the same two frames as 'dual'; the two differ
+                       only inside the model, at the fusion operator.
         reference    : 'WLI' | 'NBI' | 'random'   ('random' only meaningful in training)
         align_mode   : 'none'      — the auxiliary frame is left where it was
                        'predicted' — aligned by the 3-parameter fit on the two
@@ -92,7 +94,7 @@ class EGCPairDataset(Dataset):
         oracle_align : deprecated alias for align_mode='oracle'
         """
         assert split in {"train", "val"}
-        assert mode in {"single", "early", "dual"}
+        assert mode in {"single", "early", "dual", "mid"}
         assert reference in {"WLI", "NBI", "random"}
 
         blob = np.load(npz_path)

@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 
 from src.data.dataset import EGCPairDataset, collate
 from src.data.transforms import PairAugment
+from src.losses.align import stream_alignment_loss
 from src.losses.seg import DiceBCELoss, binary_metrics, longest_axis_px
 from src.models.net import EGCNet
 
@@ -22,7 +23,7 @@ from src.models.net import EGCNet
 @dataclass
 class RunConfig:
     name: str = "ours"
-    mode: str = "dual"                 # single | early | dual
+    mode: str = "dual"                 # single | early | dual | mid
     reference: str = "random"          # WLI | NBI | random
     npz: str = "data/packaged/egc_dualseg_384.npz"
     manifest: str = "data/packaged/manifest.csv"
@@ -56,6 +57,15 @@ class RunConfig:
     aux_fill: str = "edge"              # edge | zero
     aux_skips: bool = False
     share_aux_geometry: bool = False
+    # Distribution-alignment ablation (after Wu et al. 2026). Zero disables the
+    # term entirely, so every arm trained before this option existed is
+    # bit-for-bit reproducible with the default.
+    mmd_weight: float = 0.0
+    # Width of the mid-fusion operator's FFN, as a multiple of the channel dim.
+    # 0 disables it. 3.5 brings the mid-fusion arm to within 0.02% of the
+    # cross-attention arm's parameter count; it is set to match the budget, not
+    # tuned for accuracy.
+    mid_ffn_mult: float = 0.0
     extra: dict = field(default_factory=dict)
 
 
@@ -94,7 +104,8 @@ def build_loaders(cfg: RunConfig) -> tuple[DataLoader, DataLoader]:
 def build_model(cfg: RunConfig, device: torch.device) -> EGCNet:
     model = EGCNet(mode=cfg.mode, pretrained=cfg.pretrained,
                    use_role_embedding=cfg.use_role_embedding,
-                   aux_levels=tuple(cfg.aux_levels), aux_skips=cfg.aux_skips)
+                   aux_levels=tuple(cfg.aux_levels), aux_skips=cfg.aux_skips,
+                   mid_ffn_mult=cfg.mid_ffn_mult)
     if cfg.init_from and os.path.isfile(cfg.init_from):
         state = torch.load(cfg.init_from, map_location="cpu")
         state = state.get("model", state)
@@ -109,10 +120,18 @@ def _to_device(batch: dict, device: torch.device) -> dict:
             for k, v in batch.items()}
 
 
-def run_epoch(model, loader, criterion, device, optimiser=None, scaler=None) -> float:
+def run_epoch(model, loader, criterion, device, optimiser=None, scaler=None,
+              mmd_weight: float = 0.0) -> tuple[float, float]:
+    """Returns (mean total loss, mean raw MMD term before weighting).
+
+    The MMD is reported unweighted so its magnitude can be read against the
+    segmentation loss in the epoch log. A term that is orders of magnitude larger
+    or smaller than the objective it is added to is a misconfigured weight, and
+    that is invisible if only the weighted sum is logged.
+    """
     train = optimiser is not None
     model.train(train)
-    total, n = 0.0, 0
+    total, align_total, n = 0.0, 0.0, 0
     for batch in loader:
         batch = _to_device(batch, device)
         aux = batch.get("aux")
@@ -121,6 +140,10 @@ def run_epoch(model, loader, criterion, device, optimiser=None, scaler=None) -> 
                                 enabled=scaler is not None and device.type == "cuda"):
                 out = model(batch["ref"], aux, batch["ref_id"])
                 loss = criterion(out["logits"], batch["mask"])
+                if mmd_weight:
+                    align = stream_alignment_loss(out)
+                    loss = loss + mmd_weight * align
+                    align_total += float(align.detach()) * batch["ref"].shape[0]
         if train:
             optimiser.zero_grad(set_to_none=True)
             if scaler is not None:
@@ -132,7 +155,7 @@ def run_epoch(model, loader, criterion, device, optimiser=None, scaler=None) -> 
                 optimiser.step()
         total += loss.item() * batch["ref"].shape[0]
         n += batch["ref"].shape[0]
-    return total / max(1, n)
+    return total / max(1, n), align_total / max(1, n)
 
 
 @torch.no_grad()
@@ -187,15 +210,19 @@ def train_one(cfg: RunConfig) -> dict:
           f"| device {device.type}")
     for epoch in range(cfg.epochs):
         t0 = time.time()
-        tr_loss = run_epoch(model, train_loader, criterion, device, optimiser, scaler)
+        tr_loss, tr_mmd = run_epoch(model, train_loader, criterion, device,
+                                    optimiser, scaler, cfg.mmd_weight)
         val_dice, _ = evaluate(model, val_loader, device)
         scheduler.step()
-        history.append(dict(epoch=epoch, train_loss=tr_loss, val_dice=val_dice))
+        history.append(dict(epoch=epoch, train_loss=tr_loss, val_dice=val_dice,
+                            train_mmd=tr_mmd))
         if val_dice > best:
             best, best_epoch = val_dice, epoch
             torch.save({"model": model.state_dict(), "cfg": vars(cfg),
                         "epoch": epoch, "val_dice": val_dice}, ckpt_path)
-        print(f"  epoch {epoch:3d}  loss {tr_loss:.4f}  val_dice {val_dice:.4f}"
+        mmd_note = f"  mmd {tr_mmd:.4f}" if cfg.mmd_weight else ""
+        print(f"  epoch {epoch:3d}  loss {tr_loss:.4f}{mmd_note}  "
+              f"val_dice {val_dice:.4f}"
               f"{'  *' if epoch == best_epoch else ''}  ({time.time() - t0:.1f}s)")
         if epoch - best_epoch >= cfg.patience:
             print(f"  early stop at epoch {epoch} (best {best:.4f} @ {best_epoch})")
@@ -217,7 +244,7 @@ def train_one(cfg: RunConfig) -> dict:
     log_path = os.path.join(cfg.out_dir, "logs", f"{tag}.csv")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=["epoch", "train_loss", "val_dice"])
+        writer = csv.DictWriter(fh, fieldnames=list(history[0]))
         writer.writeheader()
         writer.writerows(history)
 
