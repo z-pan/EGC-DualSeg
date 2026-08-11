@@ -89,8 +89,29 @@ assert os.path.isfile(f"{DRIVE_DATA}/egc_dualseg_384.npz"), \
 print("drive ok")
 """))
 
-cells.append(md("## 3 — Clone or update the repository\n\nPublic repo, so no credentials are needed."))
+cells.append(md(r"""
+## 3 — Clone or update the repository
+
+Public repo, so no credentials are needed.
+
+**The symlink has to come off before the pull.** Section 6 replaces `results/`
+with a symlink into Drive, and result CSVs are committed to the repository. A
+pull that brings new files under `results/` then aborts with
+*"untracked working tree files would be overwritten"*, once per incoming file —
+git will not write through a symlink it does not track. Detaching first and
+re-running section 6 afterwards is the whole fix.
+
+Detach with `unlink`, never `rmtree` or `rm -rf`: the target of that symlink is
+the Drive folder holding every result this project has produced.
+"""))
 cells.append(code(r"""
+# Detach before pulling; section 6 re-establishes both links afterwards.
+for _name in ("results", "checkpoints"):
+    _p = os.path.join(REPO, _name) if os.path.isdir(REPO) else None
+    if _p and os.path.islink(_p):
+        os.unlink(_p)                      # unlink only - the target is Drive
+        print(f"detached {_name} symlink")
+
 if not os.path.isdir(REPO):
     !git clone --quiet https://github.com/z-pan/EGC-DualSeg.git {REPO}
 else:
@@ -99,6 +120,8 @@ else:
 os.chdir(REPO)
 sys.path.insert(0, REPO)
 !git -C {REPO} log --oneline -1
+print("\nre-run section 6 now: results/ and checkpoints/ are real directories "
+      "again and outputs would land on the Colab disk, not on Drive.")
 """))
 
 cells.append(md("## 4 — Dependencies\n\nColab ships torch and torchvision. Only fill the gaps, and record the version actually used."))
@@ -141,6 +164,10 @@ cells.append(md(r"""
 
 `results/` and `checkpoints/` inside the repo become symlinks into Drive, so a dropped session
 loses nothing and the queue can resume.
+
+**Re-run this after every pull.** Section 3 detaches both links so git can write committed
+result CSVs into `results/`; until this cell runs again they are ordinary directories on the
+Colab disk, and anything written there dies with the session.
 """))
 cells.append(code(r"""
 import shutil
