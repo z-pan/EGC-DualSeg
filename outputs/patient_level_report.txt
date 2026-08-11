@@ -1,0 +1,331 @@
+
+==============================================================================
+=== reference frame: WLI   baseline wli_only ===
+    the two frames have different ground-truth masks and are not comparable
+    unit of analysis: patient (n = 77)
+
+  -- Dice  (higher is better) --
+     wli_only                 0.7192
+     early_fusion_wli         0.6322   median -0.0707  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.6953   median -0.0104  p = 0.0128  Holm = 0.0893   n = 77
+     mid_fusion               0.7204   median +0.0089  p = 0.2761  Holm = 1.0000   n = 77
+     mmd_fusion               0.7189   median +0.0078  p = 0.9010  Holm = 1.0000   n = 77
+     mid_fusion_wide          0.7182   median +0.0054  p = 0.7471  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.7115   median +0.0050  p = 0.5043  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01         0.7105   median +0.0043  p = 0.7898  Holm = 1.0000   n = 77
+     ours                     0.7165   median +0.0019  p = 0.7664  Holm = 1.0000   n = 77   <-- proposed
+
+  -- boundary-F @1px  (higher is better) --
+     wli_only                 0.1376
+     early_fusion_wli         0.0774   median -0.0560  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.1207   median -0.0165  p = 0.0091  Holm = 0.0548   n = 77
+     mmd_fusion_w0.01         0.1211   median -0.0095  p = 0.0042  Holm = 0.0295*  n = 77
+     mid_fusion_wide          0.1311   median -0.0075  p = 0.2852  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.1298   median -0.0064  p = 0.1184  Holm = 0.5922   n = 77
+     mid_fusion               0.1349   median -0.0048  p = 0.8530  Holm = 1.0000   n = 77
+     ours                     0.1430   median +0.0022  p = 0.3729  Holm = 1.0000   n = 77   <-- proposed
+     mmd_fusion               0.1383   median +0.0012  p = 0.7781  Holm = 1.0000   n = 77
+
+  -- boundary-F @2px  (higher is better) --
+     wli_only                 0.1985
+     early_fusion_wli         0.1178   median -0.0623  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.1744   median -0.0176  p = 0.0020  Holm = 0.0118*  n = 77
+     mmd_fusion_w0.01         0.1748   median -0.0149  p = 0.0007  Holm = 0.0048*  n = 77
+     mid_fusion_wide          0.1868   median -0.0074  p = 0.2144  Holm = 0.8578   n = 77
+     mid_fusion               0.1950   median -0.0061  p = 0.7242  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.1872   median -0.0059  p = 0.0540  Holm = 0.2700   n = 77
+     mmd_fusion               0.1993   median -0.0044  p = 0.5644  Holm = 1.0000   n = 77
+     ours                     0.2026   median +0.0035  p = 0.5108  Holm = 1.0000   n = 77   <-- proposed
+
+  -- boundary-F @3px  (higher is better) --
+     wli_only                 0.2505
+     early_fusion_wli         0.1571   median -0.0742  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.2242   median -0.0176  p = 0.0034  Holm = 0.0205*  n = 77
+     mmd_fusion_w0.01         0.2256   median -0.0169  p = 0.0019  Holm = 0.0133*  n = 77
+     mid_fusion_wide          0.2382   median -0.0125  p = 0.2338  Holm = 0.9351   n = 77
+     mmd_fusion_w1e-4         0.2382   median -0.0124  p = 0.0521  Holm = 0.2606   n = 77
+     mmd_fusion               0.2516   median -0.0074  p = 0.5644  Holm = 1.0000   n = 77
+     mid_fusion               0.2483   median -0.0050  p = 0.7128  Holm = 1.0000   n = 77
+     ours                     0.2549   median +0.0035  p = 0.6642  Holm = 1.0000   n = 77   <-- proposed
+
+  -- boundary-F @5px  (higher is better) --
+     wli_only                 0.3300
+     early_fusion_wli         0.2243   median -0.0973  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.3037   median -0.0209  p = 0.0139  Holm = 0.0932   n = 77
+     mmd_fusion_w0.01         0.3052   median -0.0167  p = 0.0133  Holm = 0.0932   n = 77
+     mid_fusion_wide          0.3165   median -0.0129  p = 0.2991  Holm = 1.0000   n = 77
+     mmd_fusion               0.3333   median -0.0118  p = 0.8016  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.3170   median -0.0097  p = 0.1375  Holm = 0.6875   n = 77
+     ours                     0.3347   median -0.0048  p = 0.7166  Holm = 1.0000   n = 77   <-- proposed
+     mid_fusion               0.3291   median -0.0029  p = 0.9413  Holm = 1.0000   n = 77
+
+  -- normalised surface dice @3px  (higher is better) --
+     wli_only                 0.2496
+     early_fusion_wli         0.1565   median -0.0751  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion_w1.0          0.2238   median -0.0171  p = 0.0039  Holm = 0.0234*  n = 77
+     mmd_fusion_w0.01         0.2249   median -0.0156  p = 0.0018  Holm = 0.0127*  n = 77
+     mid_fusion_wide          0.2373   median -0.0134  p = 0.2338  Holm = 0.9351   n = 77
+     mmd_fusion_w1e-4         0.2376   median -0.0114  p = 0.0527  Holm = 0.2637   n = 77
+     mmd_fusion               0.2509   median -0.0080  p = 0.5887  Holm = 1.0000   n = 77
+     mid_fusion               0.2476   median -0.0041  p = 0.7318  Holm = 1.0000   n = 77
+     ours                     0.2540   median +0.0033  p = 0.6679  Holm = 1.0000   n = 77   <-- proposed
+
+  -- 95th-percentile Hausdorff  (lower is better) --
+     wli_only                64.9000
+     early_fusion_wli        78.2808   median +10.7487  p = 0.0000  Holm = 0.0001*  n = 77
+     mmd_fusion_w1.0         77.8930   median +8.1277  p = 0.0000  Holm = 0.0001*  n = 77
+     mmd_fusion              74.5220   median +5.1283  p = 0.0005  Holm = 0.0033*  n = 77
+     mmd_fusion_w1e-4        65.6933   median +1.7415  p = 0.6495  Holm = 1.0000   n = 77
+     mid_fusion              64.7869   median +1.0158  p = 0.6902  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01        65.6522   median +0.8427  p = 0.7242  Holm = 1.0000   n = 77
+     mid_fusion_wide         63.7480   median +0.3322  p = 0.9494  Holm = 1.0000   n = 77
+     ours                    64.6184   median -0.3065  p = 0.9818  Holm = 1.0000   n = 77   <-- proposed
+
+  -- lesion missed (fraction)  (lower is better) --
+     wli_only                 0.2006
+     early_fusion_wli         0.2568   median +0.0385  p = 0.0001  Holm = 0.0004*  n = 77
+     mid_fusion               0.1996   median -0.0104  p = 0.6459  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.1929   median -0.0093  p = 0.1173  Holm = 0.8208   n = 77
+     ours                     0.2047   median -0.0041  p = 0.7395  Holm = 1.0000   n = 77   <-- proposed
+     mid_fusion_wide          0.1932   median -0.0040  p = 0.3259  Holm = 1.0000   n = 77
+     mmd_fusion               0.2136   median -0.0030  p = 0.5373  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01         0.1983   median +0.0025  p = 0.8970  Holm = 1.0000   n = 77
+     mmd_fusion_w1.0          0.2105   median -0.0015  p = 0.6206  Holm = 1.0000   n = 77
+
+  -- normal tissue taken (x lesion)  (lower is better) --
+     wli_only                 0.6787
+     early_fusion_wli         0.9260   median +0.1358  p = 0.0002  Holm = 0.0017*  n = 77
+     mmd_fusion_w1e-4         0.7635   median +0.0253  p = 0.1744  Holm = 1.0000   n = 77
+     mmd_fusion_w1.0          0.7700   median +0.0240  p = 0.0420  Holm = 0.2940   n = 77
+     mid_fusion               0.6761   median -0.0225  p = 0.3063  Holm = 1.0000   n = 77
+     ours                     0.6925   median -0.0130  p = 0.2089  Holm = 1.0000   n = 77   <-- proposed
+     mid_fusion_wide          0.6972   median -0.0045  p = 0.9494  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01         0.6818   median +0.0010  p = 0.8331  Holm = 1.0000   n = 77
+     mmd_fusion               0.6717   median -0.0009  p = 0.5713  Holm = 1.0000   n = 77
+
+  -- margin required (px)  (lower is better) --
+     wli_only                37.4990
+     early_fusion_wli        44.1141   median +3.8700  p = 0.0036  Holm = 0.0287*  n = 77
+     mmd_fusion_w1e-4        37.0706   median -1.3344  p = 0.1760  Holm = 1.0000   n = 77
+     mmd_fusion_w1.0         38.9683   median -1.2736  p = 0.5644  Holm = 1.0000   n = 77
+     mid_fusion              38.1892   median -1.2386  p = 0.6865  Holm = 1.0000   n = 77
+     mid_fusion_wide         38.1310   median -0.8247  p = 0.8689  Holm = 1.0000   n = 77
+     mmd_fusion              39.8916   median +0.5785  p = 0.2460  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01        38.4728   median -0.0388  p = 0.5474  Holm = 1.0000   n = 77
+     ours                    38.6341   median -0.0358  p = 0.7937  Holm = 1.0000   n = 77   <-- proposed
+
+  -- proposed versus input-level fusion (early_fusion_wli) --
+     Dice                             median +0.0784  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @1px                  median +0.0525  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @2px                  median +0.0694  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @3px                  median +0.0870  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @5px                  median +0.1091  p = 0.0000  Holm = 0.0000*  n = 77
+     normalised surface dice @3px     median +0.0868  p = 0.0000  Holm = 0.0000*  n = 77
+     95th-percentile Hausdorff        median -12.4373  p = 0.0000  Holm = 0.0000*  n = 77
+     lesion missed (fraction)         median -0.0353  p = 0.0010  Holm = 0.0020*  n = 77
+     normal tissue taken (x lesion)   median -0.1531  p = 0.0000  Holm = 0.0000*  n = 77
+     margin required (px)             median -4.8345  p = 0.0035  Holm = 0.0035*  n = 77
+
+  -- alignment probes (development fold only; oracle arms are upper bounds, not results) --
+     oracle_noskip            0.7640   median +0.0323  p = 0.0730  n = 15   [UPPER BOUND]
+     oracle_skip              0.8174   median +0.0595  p = 0.0026  n = 15   [UPPER BOUND]
+     oracle_skip_shuffled     0.7746   median +0.0232  p = 0.0946  n = 15   [UPPER BOUND]
+     pred_noskip              0.7546   median +0.0214  p = 0.2078  n = 15   [attainable]
+     pred_skip                0.7418   median +0.0078  p = 0.5995  n = 15   [attainable]
+     pred_skip_shuffled       0.7336   median -0.0364  p = 0.4212  n = 15   [attainable]
+
+  -- margin adequacy: whole lesion inside the prediction dilated by k px --
+k                  0     5     10    20    40
+arm                                          
+early_fusion_wli  6.1  10.2  17.5  30.3  55.6
+mid_fusion        7.6  16.2  24.5  36.1  61.3
+mid_fusion_wide   6.3  17.7  22.7  37.2  61.0
+mmd_fusion        5.4  15.2  21.4  32.5  59.5
+mmd_fusion_w0.01  5.6  14.3  21.6  33.3  58.0
+mmd_fusion_w1.0   5.8  14.5  23.4  35.5  61.0
+mmd_fusion_w1e-4  6.3  17.5  24.2  37.2  64.1
+ours              6.9  16.2  22.9  35.3  61.3
+wli_only          3.2  14.5  21.9  35.7  61.3
+     significant at k (uncorrected):
+       early_fusion_wli       k=0   +2.8pp  p = 0.0311
+       mid_fusion             k=0   +4.3pp  p = 0.0033
+       mid_fusion_wide        k=0   +3.0pp  p = 0.0028
+       mmd_fusion             k=0   +2.2pp  p = 0.0180
+       mmd_fusion_w0.01       k=0   +2.4pp  p = 0.0254
+       mmd_fusion_w1.0        k=0   +2.6pp  p = 0.0223
+       mmd_fusion_w1e-4       k=0   +3.0pp  p = 0.0072
+       ours                   k=0   +3.7pp  p = 0.0039
+       early_fusion_wli       k=5   -4.3pp  p = 0.0101
+       mid_fusion_wide        k=5   +3.2pp  p = 0.0404
+       mmd_fusion_w1e-4       k=5   +3.0pp  p = 0.0231
+       early_fusion_wli       k=10  -4.3pp  p = 0.0311
+       early_fusion_wli       k=40  -5.6pp  p = 0.0293
+
+==============================================================================
+=== reference frame: NBI   baseline nbi_only ===
+    the two frames have different ground-truth masks and are not comparable
+    unit of analysis: patient (n = 77)
+
+  -- Dice  (higher is better) --
+     nbi_only                 0.7871
+     early_fusion_nbi         0.7575   median -0.0185  p = 0.0007  Holm = 0.0053*  n = 77
+     ours                     0.7966   median +0.0102  p = 0.1081  Holm = 0.5403   n = 77   <-- proposed
+     mid_fusion               0.8037   median +0.0075  p = 0.0065  Holm = 0.0458*  n = 77
+     mid_fusion_wide          0.8041   median +0.0067  p = 0.0228  Holm = 0.1366   n = 77
+     mmd_fusion_w1e-4         0.7979   median +0.0056  p = 0.1728  Holm = 0.5403   n = 77
+     mmd_fusion_w1.0          0.7718   median -0.0050  p = 0.1126  Holm = 0.5403   n = 77
+     mmd_fusion               0.7824   median +0.0033  p = 0.6314  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01         0.7882   median -0.0031  p = 0.7587  Holm = 1.0000   n = 77
+
+  -- boundary-F @1px  (higher is better) --
+     nbi_only                 0.1677
+     early_fusion_nbi         0.1363   median -0.0294  p = 0.0000  Holm = 0.0000*  n = 77
+     ours                     0.1952   median +0.0196  p = 0.0000  Holm = 0.0002*  n = 77   <-- proposed
+     mid_fusion               0.1904   median +0.0129  p = 0.0003  Holm = 0.0017*  n = 77
+     mid_fusion_wide          0.1886   median +0.0101  p = 0.0011  Holm = 0.0056*  n = 77
+     mmd_fusion_w1e-4         0.1877   median +0.0073  p = 0.0035  Holm = 0.0139*  n = 77
+     mmd_fusion               0.1806   median +0.0057  p = 0.0474  Holm = 0.1422   n = 77
+     mmd_fusion_w0.01         0.1818   median +0.0050  p = 0.0657  Holm = 0.1422   n = 77
+     mmd_fusion_w1.0          0.1694   median -0.0005  p = 0.9252  Holm = 0.9252   n = 77
+
+  -- boundary-F @2px  (higher is better) --
+     nbi_only                 0.2233
+     early_fusion_nbi         0.1893   median -0.0292  p = 0.0000  Holm = 0.0000*  n = 77
+     ours                     0.2589   median +0.0263  p = 0.0000  Holm = 0.0000*  n = 77   <-- proposed
+     mid_fusion               0.2522   median +0.0203  p = 0.0001  Holm = 0.0004*  n = 77
+     mid_fusion_wide          0.2500   median +0.0196  p = 0.0001  Holm = 0.0006*  n = 77
+     mmd_fusion_w1e-4         0.2518   median +0.0188  p = 0.0001  Holm = 0.0005*  n = 77
+     mmd_fusion               0.2423   median +0.0165  p = 0.0040  Holm = 0.0121*  n = 77
+     mmd_fusion_w0.01         0.2407   median +0.0096  p = 0.0358  Holm = 0.0715   n = 77
+     mmd_fusion_w1.0          0.2304   median +0.0059  p = 0.4725  Holm = 0.4725   n = 77
+
+  -- boundary-F @3px  (higher is better) --
+     nbi_only                 0.2731
+     ours                     0.3137   median +0.0320  p = 0.0000  Holm = 0.0000*  n = 77   <-- proposed
+     mmd_fusion_w1e-4         0.3069   median +0.0296  p = 0.0000  Holm = 0.0002*  n = 77
+     early_fusion_nbi         0.2370   median -0.0272  p = 0.0000  Holm = 0.0001*  n = 77
+     mmd_fusion               0.2939   median +0.0252  p = 0.0026  Holm = 0.0079*  n = 77
+     mid_fusion_wide          0.3033   median +0.0245  p = 0.0002  Holm = 0.0008*  n = 77
+     mid_fusion               0.3059   median +0.0244  p = 0.0000  Holm = 0.0002*  n = 77
+     mmd_fusion_w1.0          0.2840   median +0.0127  p = 0.3568  Holm = 0.3568   n = 77
+     mmd_fusion_w0.01         0.2928   median +0.0096  p = 0.0240  Holm = 0.0480*  n = 77
+
+  -- boundary-F @5px  (higher is better) --
+     nbi_only                 0.3514
+     ours                     0.3936   median +0.0417  p = 0.0000  Holm = 0.0000*  n = 77   <-- proposed
+     early_fusion_nbi         0.3102   median -0.0400  p = 0.0000  Holm = 0.0001*  n = 77
+     mid_fusion               0.3853   median +0.0329  p = 0.0002  Holm = 0.0009*  n = 77
+     mmd_fusion_w1e-4         0.3838   median +0.0263  p = 0.0002  Holm = 0.0011*  n = 77
+     mid_fusion_wide          0.3808   median +0.0238  p = 0.0007  Holm = 0.0029*  n = 77
+     mmd_fusion               0.3699   median +0.0197  p = 0.0277  Holm = 0.0832   n = 77
+     mmd_fusion_w0.01         0.3688   median +0.0192  p = 0.0485  Holm = 0.0971   n = 77
+     mmd_fusion_w1.0          0.3638   median +0.0107  p = 0.3360  Holm = 0.3360   n = 77
+
+  -- normalised surface dice @3px  (higher is better) --
+     nbi_only                 0.2724
+     ours                     0.3128   median +0.0313  p = 0.0000  Holm = 0.0000*  n = 77   <-- proposed
+     mmd_fusion_w1e-4         0.3061   median +0.0283  p = 0.0000  Holm = 0.0002*  n = 77
+     early_fusion_nbi         0.2362   median -0.0265  p = 0.0000  Holm = 0.0000*  n = 77
+     mmd_fusion               0.2932   median +0.0248  p = 0.0025  Holm = 0.0074*  n = 77
+     mid_fusion_wide          0.3026   median +0.0243  p = 0.0002  Holm = 0.0007*  n = 77
+     mid_fusion               0.3051   median +0.0241  p = 0.0000  Holm = 0.0002*  n = 77
+     mmd_fusion_w1.0          0.2833   median +0.0126  p = 0.3489  Holm = 0.3489   n = 77
+     mmd_fusion_w0.01         0.2920   median +0.0097  p = 0.0250  Holm = 0.0500*  n = 77
+
+  -- 95th-percentile Hausdorff  (lower is better) --
+     nbi_only                66.8227
+     mmd_fusion              74.2291   median +3.5966  p = 0.0250  Holm = 0.1749   n = 77
+     mid_fusion              63.1835   median -3.4190  p = 0.1015  Holm = 0.5076   n = 77
+     mmd_fusion_w1.0         76.2742   median +2.8899  p = 0.0056  Holm = 0.0449*  n = 77
+     mmd_fusion_w1e-4        65.1534   median -2.7383  p = 0.1843  Holm = 0.7370   n = 77
+     mid_fusion_wide         63.5269   median -2.3870  p = 0.0751  Holm = 0.4508   n = 77
+     ours                    65.7962   median -1.8522  p = 0.2144  Holm = 0.7370   n = 77   <-- proposed
+     early_fusion_nbi        68.5678   median +1.8033  p = 0.3621  Holm = 0.7370   n = 77
+     mmd_fusion_w0.01        68.3410   median -0.2492  p = 0.9494  Holm = 0.9494   n = 77
+
+  -- lesion missed (fraction)  (lower is better) --
+     nbi_only                 0.1559
+     early_fusion_nbi         0.1857   median +0.0168  p = 0.0068  Holm = 0.0473*  n = 77
+     ours                     0.1427   median -0.0149  p = 0.0044  Holm = 0.0349*  n = 77   <-- proposed
+     mid_fusion_wide          0.1369   median -0.0142  p = 0.0131  Holm = 0.0788   n = 77
+     mmd_fusion               0.1579   median -0.0108  p = 0.4448  Holm = 1.0000   n = 77
+     mmd_fusion_w0.01         0.1539   median -0.0095  p = 0.6242  Holm = 1.0000   n = 77
+     mid_fusion               0.1508   median -0.0092  p = 0.1876  Holm = 0.7505   n = 77
+     mmd_fusion_w1e-4         0.1454   median -0.0086  p = 0.1058  Holm = 0.5292   n = 77
+     mmd_fusion_w1.0          0.1581   median -0.0037  p = 0.6716  Holm = 1.0000   n = 77
+
+  -- normal tissue taken (x lesion)  (lower is better) --
+     nbi_only                 0.3159
+     mmd_fusion_w1.0          0.4067   median +0.0222  p = 0.0441  Holm = 0.3086   n = 77
+     mid_fusion               0.3130   median -0.0197  p = 0.2852  Holm = 1.0000   n = 77
+     early_fusion_nbi         0.4516   median +0.0188  p = 0.0073  Holm = 0.0583   n = 77
+     mmd_fusion_w0.01         0.3557   median +0.0059  p = 0.2378  Holm = 1.0000   n = 77
+     mmd_fusion_w1e-4         0.3286   median +0.0030  p = 0.3039  Holm = 1.0000   n = 77
+     mid_fusion_wide          0.3459   median -0.0019  p = 0.8490  Holm = 1.0000   n = 77
+     mmd_fusion               0.3538   median +0.0015  p = 0.2163  Holm = 1.0000   n = 77
+     ours                     0.3721   median -0.0014  p = 0.4151  Holm = 1.0000   n = 77   <-- proposed
+
+  -- margin required (px)  (lower is better) --
+     nbi_only                39.8313
+     mid_fusion_wide         35.9720   median -3.9570  p = 0.0010  Holm = 0.0081*  n = 77
+     early_fusion_nbi        44.6942   median +2.7059  p = 0.0133  Holm = 0.0932   n = 77
+     mmd_fusion_w1e-4        36.5145   median -2.0820  p = 0.0228  Holm = 0.1139   n = 77
+     ours                    38.1915   median -2.0225  p = 0.0151  Holm = 0.0932   n = 77   <-- proposed
+     mid_fusion              38.6109   median -1.5084  p = 0.2034  Holm = 0.8136   n = 77
+     mmd_fusion_w0.01        38.5329   median -1.4301  p = 0.2968  Holm = 0.8903   n = 77
+     mmd_fusion              40.1907   median -0.7995  p = 0.3922  Holm = 0.8903   n = 77
+     mmd_fusion_w1.0         40.0350   median -0.7444  p = 0.6459  Holm = 0.8903   n = 77
+
+  -- proposed versus input-level fusion (early_fusion_nbi) --
+     Dice                             median +0.0338  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @1px                  median +0.0426  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @2px                  median +0.0640  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @3px                  median +0.0726  p = 0.0000  Holm = 0.0000*  n = 77
+     boundary-F @5px                  median +0.0862  p = 0.0000  Holm = 0.0000*  n = 77
+     normalised surface dice @3px     median +0.0729  p = 0.0000  Holm = 0.0000*  n = 77
+     95th-percentile Hausdorff        median -1.3390  p = 0.0885  Holm = 0.0885   n = 77
+     lesion missed (fraction)         median -0.0401  p = 0.0000  Holm = 0.0000*  n = 77
+     normal tissue taken (x lesion)   median -0.0064  p = 0.0210  Holm = 0.0420*  n = 77
+     margin required (px)             median -6.1404  p = 0.0001  Holm = 0.0002*  n = 77
+
+  -- alignment probes (development fold only; oracle arms are upper bounds, not results) --
+     oracle_noskip            0.7955   median +0.0097  p = 0.3303  n = 15   [UPPER BOUND]
+     oracle_skip              0.8224   median +0.0210  p = 0.0256  n = 15   [UPPER BOUND]
+     oracle_skip_shuffled     0.7873   median -0.0119  p = 0.3591  n = 15   [UPPER BOUND]
+     pred_noskip              0.7865   median +0.0024  p = 0.8469  n = 15   [attainable]
+     pred_skip                0.7929   median -0.0003  p = 0.9780  n = 15   [attainable]
+     pred_skip_shuffled       0.7813   median -0.0169  p = 0.3894  n = 15   [attainable]
+
+  -- margin adequacy: whole lesion inside the prediction dilated by k px --
+k                  0     5     10    20    40
+arm                                          
+early_fusion_nbi  2.8   7.8  14.7  25.8  55.2
+mid_fusion        1.3   9.3  17.7  33.5  62.8
+mid_fusion_wide   2.4  13.0  19.7  36.6  63.6
+mmd_fusion        3.2  10.6  19.0  33.5  59.1
+mmd_fusion_w0.01  2.8  10.8  18.2  33.8  61.9
+mmd_fusion_w1.0   3.5  10.2  18.8  31.6  59.1
+mmd_fusion_w1e-4  2.8  12.3  20.8  38.7  64.9
+ours              1.9  12.3  20.6  36.6  61.0
+nbi_only          2.2   8.4  13.6  29.4  58.4
+     significant at k (uncorrected):
+       mid_fusion_wide        k=5   +4.5pp  p = 0.0182
+       mmd_fusion_w1e-4       k=5   +3.9pp  p = 0.0258
+       mid_fusion             k=10  +4.1pp  p = 0.0104
+       mid_fusion_wide        k=10  +6.1pp  p = 0.0102
+       mmd_fusion             k=10  +5.4pp  p = 0.0133
+       mmd_fusion_w0.01       k=10  +4.5pp  p = 0.0231
+       mmd_fusion_w1.0        k=10  +5.2pp  p = 0.0111
+       mmd_fusion_w1e-4       k=10  +7.1pp  p = 0.0014
+       ours                   k=10  +6.9pp  p = 0.0013
+       mid_fusion_wide        k=20  +7.1pp  p = 0.0131
+       mmd_fusion_w1e-4       k=20  +9.3pp  p = 0.0029
+       ours                   k=20  +7.1pp  p = 0.0073
+       mid_fusion             k=40  +4.3pp  p = 0.0403
+       mid_fusion_wide        k=40  +5.2pp  p = 0.0079
+       mmd_fusion_w1e-4       k=40  +6.5pp  p = 0.0077
+
+==============================================================================
+192 comparisons -> outputs/patient_level.csv
+Every p value above is on patient-level paired differences. Cohort means are
+printed for description only and are not the basis of any test.
