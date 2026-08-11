@@ -241,6 +241,59 @@ A batch-level distribution alignment that is invariant to which WLI frame was
 paired with which NBI frame is not merely unhelpful on this cohort — it costs
 accuracy. Report the calibrated weight alongside the published 1e-4.
 
+### 3c. The weight sweep settles it: harmful at every weight, monotonically
+
+Four orders of magnitude, the published value included. NBI cohort mean Dice:
+
+| lambda | NBI Dice | vs the baseline's all-threshold ceiling (0.7850) |
+|---|---|---|
+| none (`mid_fusion`) | 0.8016 | above |
+| 1e-4 (published) | 0.7956 | above |
+| 0.01 | 0.7856 | above |
+| 0.3 | 0.7795 | **below** |
+| 1.0 | 0.7678 | **below** |
+
+Monotone on NBI, and the trend is statistically real: Friedman across the five
+arms gives chi2 = 41.1, p = 2.6e-08 (NBI) and chi2 = 26.7, p = 2.3e-05 (WLI);
+the per-image Spearman of Dice against log10(lambda) has median rho = -0.300,
+negative for 104/150 images on NBI and 93/150 on WLI. WLI is significant but not
+monotone in its cohort means, which is what a null frame looks like.
+
+Two consequences:
+
+* **The pre-registered reading is met.** No weight beats `mid_fusion`, so this is
+  a claim about the method rather than about a hyperparameter: batch-level
+  distribution alignment that ignores the pairing costs accuracy here, and costs
+  more the harder it is applied.
+* **The "you under-weighted the baseline" objection reverses.** lambda = 1.0 is
+  the value the selection rule picks, and it is the worst of the five:
+  `w1.0 - mid_fusion` median -0.0142 on NBI and -0.0184 on WLI, both p < 0.0001.
+
+### 3d. Two methodological findings that fell out of the sweep
+
+**The noise floor is small, and paired medians are the reason.** `mmd_fusion_w1e-4`
+contributes 4e-6 to the objective, so it and `mid_fusion` are functionally the
+same configuration — an accidental near-replicate. Their paired difference is
+median -0.0008 on NBI (p = 0.31) and -0.0017 on WLI (p = 0.36): essentially zero,
+and an order of magnitude below the headline `ours - nbi_only` effect of +0.0089.
+
+But their **cohort means** differ by -0.0061 and -0.0092, five times the paired
+median. A handful of images carries the whole gap. This is direct evidence for
+reporting paired medians with Wilcoxon rather than cohort means, and it is worth
+stating in Methods as a measured justification rather than a stylistic choice.
+
+**The threshold-sweep verdict is unstable near its category boundaries.**
+`mmd_fusion_w1e-4` and `mid_fusion` are statistically indistinguishable on Dice
+(p = 0.31), yet on NBI one earns *"outside the baseline's curve on both axes: a
+better model, not a better threshold"* and the other only *"wins on one axis
+only"*. The verdict is computed by matching **cohort means**, the very quantity
+shown above to be fragile.
+
+That does not overturn the ceiling argument in Fig. 3b, but it constrains how it
+may be written: the sweep returns a category label, not an estimate with an
+interval, and adjacent categories can be separated by noise. Report the ceiling
+comparison as the numeric gap it is, and do not lean on the verdict wording.
+
 ### 4. What this does to the paper's framing
 
 Three independent dual arms now beat the single-modality baseline on NBI —
