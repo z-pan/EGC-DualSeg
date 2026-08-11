@@ -19,8 +19,16 @@ checkpoints/
 
 # Prediction CSVs ARE committed (results/*.csv) — they are what makes the
 # figures reproducible without a GPU. Only logs and scratch output are ignored.
-results/logs/
+# Note the trailing /* rather than /: git never descends into an excluded
+# DIRECTORY, so a negation below it can never re-include anything. Excluding the
+# contents instead is what makes the exception work.
+results/logs/*
 results/scratch/
+# Exception: the MMD calibration logs. Their train_mmd column is the only record
+# of how much the alignment term actually contributed, and the weight chosen for
+# the published sweep was picked from it. That makes them a result, not scratch —
+# without them the calibration table cannot be reproduced from the repository.
+!results/logs/mmdcal_*.csv
 wandb/
 runs/
 checkpoints_local/
