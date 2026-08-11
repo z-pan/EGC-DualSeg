@@ -99,7 +99,14 @@ def main() -> int:
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--num-workers", type=int, default=2)
     ap.add_argument("--force", action="store_true")
+    # See boundary_metrics.py: arms that share a yaml and differ only by a
+    # train-time override would otherwise collide on the output path and be
+    # skipped as already done, producing nothing.
+    ap.add_argument("--name", default=None,
+                    help="override the config's name; one config path only")
     args = ap.parse_args()
+    if args.name is not None and len(args.configs) != 1:
+        ap.error("--name applies to a single --configs entry")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for path in args.configs:
@@ -111,6 +118,8 @@ def main() -> int:
         raw.pop("seeds", None)
         if args.ckpt_dir:
             raw["ckpt_dir"] = args.ckpt_dir
+        if args.name:
+            raw["name"] = args.name
         out_dir = args.out_dir or raw.get("out_dir", "results")
         raw["num_workers"] = args.num_workers
 

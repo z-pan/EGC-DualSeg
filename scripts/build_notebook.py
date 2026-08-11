@@ -1109,6 +1109,8 @@ stage = "/content/new_arm_csvs"
 shutil.rmtree(stage, ignore_errors=True)
 os.makedirs(stage)
 
+os.makedirs(f"{stage}/logs", exist_ok=True)
+
 paths = []
 for name in new_names:
     for kind in ("predictions", "boundary", "sweep"):
@@ -1116,10 +1118,145 @@ for name in new_names:
 for p in sorted(set(paths)):
     shutil.copy(p, stage)
 
+# The training logs carry the train_mmd column, which is the only record of how
+# much the alignment term actually contributed. Leaving them out of the first
+# bundle meant the contribution could not be recomputed off-line at all.
+logs = [p for n in new_names
+        for p in glob.glob(f"{DRIVE_RESULTS}/logs/{n}_fold*_seed*.csv")]
+for p in sorted(set(logs)):
+    shutil.copy(p, f"{stage}/logs")
+
 shutil.make_archive(f"{DRIVE_ROOT}/new_arm_csvs", "zip", stage)
-print(f"{len(set(paths))} files -> {DRIVE_ROOT}/new_arm_csvs.zip")
-print(f"expected {3*3*len(FOLDS)*len(SEEDS)} "
-      f"(3 arms x 3 CSV kinds x {len(FOLDS)} folds x {len(SEEDS)} seeds)")
+print(f"{len(set(paths))} CSVs + {len(set(logs))} logs -> {DRIVE_ROOT}/new_arm_csvs.zip")
+print(f"expected {3*3*len(FOLDS)*len(SEEDS)} CSVs "
+      f"(3 arms x 3 kinds x {len(FOLDS)} folds x {len(SEEDS)} seeds)")
+"""))
+
+cells.append(md(r"""
+## 13.5 — MMD weight sweep: is the negative result about the term or about one weight?
+
+13.1 calibrated on the development fold and produced this:
+
+| lambda | raw MMD | contribution | share of objective | dev Dice @12ep |
+|---|---|---|---|---|
+| 0.0001 | 0.0362 | 0.000004 | 0.00% | 0.6831 |
+| 0.01 | 0.0356 | 0.000356 | 0.04% | 0.6885 |
+| 0.1 | 0.0351 | 0.003514 | 0.37% | 0.6896 |
+| **0.3** | 0.0363 | 0.010901 | **1.12%** | 0.6882 |
+| **1.0** | 0.0519 | 0.051927 | **5.03%** | **0.7078** |
+
+Three things follow, and the first is uncomfortable.
+
+**The 45-run sweep was trained at 0.3, which is not the value the stated rule
+picks.** Both 0.3 and 1.0 fall inside the 1-5% band, and 1.0 also has the better
+development Dice by about 0.02. Reporting "the alignment term is harmful" from a
+single run at 0.3 invites the reply that the baseline was under-weighted. (The
+0.02 is a 12-epoch, one-fold, one-seed number and should not be trusted as a
+performance estimate — but it is enough to make 0.3 an awkward sole choice.)
+
+**The published 1e-4 is confirmed inert here**, not by argument but by
+measurement: it contributes 4e-6, i.e. 0.00% of the objective. That is the direct
+evidence that a loss weight does not transfer across architectures.
+
+**The term barely moves the quantity it minimises.** Raw MMD sits at ~0.035 from
+1e-4 through 0.3 and then *rises* to 0.052 at 1.0. Pushing harder on the
+alignment does not achieve more alignment, which is a finding in its own right
+and possibly a more interesting one than the accuracy result.
+
+So run the full protocol at three more weights spanning four orders of
+magnitude. The existing `mmd_fusion` arm is lambda = 0.3 and is not renamed —
+renaming would orphan 45 committed CSVs. In the write-up call the arms
+MMD(lambda = ...).
+
+**Decide the reading before running:**
+
+* none of the weights beats `mid_fusion` -> the term does not help at any
+  weight, and that is a claim about the method rather than about a
+  hyperparameter
+* lambda = 1.0 beats `mid_fusion` -> the earlier negative result is withdrawn;
+  the honest statement becomes that the term is weight-sensitive, inert at the
+  published value, and needs roughly 1.0 on this architecture
+* 1e-4 is indistinguishable from `mid_fusion` -> expected, and it is the
+  evidence that the published weight transfers to nothing here
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+# lambda = 0.3 already exists as `mmd_fusion`; do not retrain or rename it.
+MMD_SWEEP = [("mmd_fusion_w1e-4", 0.0001),
+             ("mmd_fusion_w0.01", 0.01),
+             ("mmd_fusion_w1.0",  1.0)]
+
+for name, w in MMD_SWEEP:
+    print(f"\n{'='*70}\n{name}  (lambda = {w})\n{'='*70}", flush=True)
+    t0 = time.time()
+    r = subprocess.run(["python", "scripts/train.py",
+                        "--config", "configs/mmd_fusion.yaml",
+                        "--mmd-weight", str(w), "--name", name,
+                        "--folds", *map(str, FOLDS), "--seeds", *map(str, SEEDS),
+                        "--num-workers", str(NUM_WORKERS)])
+    print(f"[{name}] exit {r.returncode} in {(time.time()-t0)/60:.1f} min", flush=True)
+
+# Watch the first arm print per-epoch lines before walking away. 13.1 once
+# returned exit 0 in 0.1 min for all five weights, which is not a fast run --
+# it is no run at all, and the whole queue would have been empty.
+"""))
+cells.append(code(r"""
+# Re-stage: section 10.0 copied whatever existed when it ran.
+import os
+need = [f"{n}_fold{f}_seed{s}.pt" for n, _ in MMD_SWEEP for f in FOLDS for s in SEEDS]
+absent = [n for n in need if not os.path.exists(f"{LOCAL_CKPT}/{n}")]
+print(f"{len(need)-len(absent)}/{len(need)} sweep checkpoints staged locally")
+if absent:
+    print("re-run section 10.0 first; missing e.g.", absent[:3])
+"""))
+cells.append(code(r"""
+import subprocess, time
+
+# These three arms share one yaml and differ only by a train-time override, so
+# --name is required: without it every arm resolves to the yaml's own name,
+# collides on the output path and is skipped as already done -- silently
+# producing nothing. --name accepts a single --configs entry, hence the loop.
+for name, _w in MMD_SWEEP:
+    for script in ("scripts/boundary_metrics.py", "scripts/threshold_sweep.py"):
+        t0 = time.time()
+        r = subprocess.run(["python", script,
+                            "--configs", "configs/mmd_fusion.yaml", "--name", name,
+                            "--ckpt-dir", LOCAL_CKPT,
+                            "--num-workers", str(NUM_WORKERS)])
+        print(f"[{name} {os.path.basename(script)}] exit {r.returncode} "
+              f"in {(time.time()-t0)/60:.1f} min", flush=True)
+"""))
+cells.append(code(r"""
+!python scripts/summarise.py           --results {DRIVE_RESULTS}
+!python scripts/summarise_boundary.py  --results {DRIVE_RESULTS}
+!python scripts/summarise_sweep.py     --results {DRIVE_RESULTS}
+"""))
+cells.append(code(r"""
+import glob, os, shutil
+
+stage = "/content/mmd_sweep_csvs"
+shutil.rmtree(stage, ignore_errors=True)
+os.makedirs(f"{stage}/logs", exist_ok=True)
+
+sweep_names = [n for n, _ in MMD_SWEEP]
+paths = [p for n in sweep_names for kind in ("predictions", "boundary", "sweep")
+         for p in glob.glob(f"{DRIVE_RESULTS}/{kind}_{n}_fold*_seed*.csv")]
+for p in sorted(set(paths)):
+    shutil.copy(p, stage)
+
+# Logs for the whole MMD family, lambda = 0.3 included: train_mmd is the only
+# record of what the term actually contributed, and it was missed on the first
+# export.
+logs = glob.glob(f"{DRIVE_RESULTS}/logs/mmd_fusion*_fold*_seed*.csv") \
+     + glob.glob(f"{DRIVE_RESULTS}/_mmdcal/logs/mmdcal_*.csv")
+for p in sorted(set(logs)):
+    shutil.copy(p, f"{stage}/logs")
+
+shutil.make_archive(f"{DRIVE_ROOT}/mmd_sweep_csvs", "zip", stage)
+print(f"{len(set(paths))} CSVs + {len(set(logs))} logs "
+      f"-> {DRIVE_ROOT}/mmd_sweep_csvs.zip")
+print(f"expected {3*3*len(FOLDS)*len(SEEDS)} CSVs")
 """))
 
 cells.append(md(r"""

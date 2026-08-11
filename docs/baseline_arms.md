@@ -197,7 +197,34 @@ side is the one that matters.
 survive Bonferroni over four metrics. The boundary advantage is suggestive, not
 established, and must be written that way.
 
-### 3. The MMD alignment term is harmful here
+### 3. The MMD alignment term at lambda = 0.3, and why one weight is not enough
+
+Calibration on the development fold, 12 epochs, one seed:
+
+| lambda | raw MMD | contribution | share of objective | dev Dice |
+|---|---|---|---|---|
+| 0.0001 | 0.0362 | 0.000004 | 0.00% | 0.6831 |
+| 0.01 | 0.0356 | 0.000356 | 0.04% | 0.6885 |
+| 0.1 | 0.0351 | 0.003514 | 0.37% | 0.6896 |
+| **0.3** | 0.0363 | 0.010901 | **1.12%** | 0.6882 |
+| **1.0** | 0.0519 | 0.051927 | **5.03%** | **0.7078** |
+
+Two readings that must be carried into the write-up:
+
+* **The published 1e-4 is inert here, measured rather than argued**: it
+  contributes 4e-6, 0.00% of the objective. This is the direct evidence that a
+  loss weight does not transfer across architectures.
+* **The full sweep was trained at 0.3, which is not the value the stated
+  selection rule picks.** Both 0.3 and 1.0 satisfy the 1-5% band and 1.0 has the
+  better development Dice by ~0.02. A single run at 0.3 therefore cannot support
+  "the alignment term is harmful" without inviting the reply that the baseline
+  was under-weighted. Section 13.5 of the notebook runs 1e-4, 0.01 and 1.0 to
+  settle it; until those land, the result below is stated **at lambda = 0.3**.
+* **The term barely moves what it minimises.** Raw MMD sits near 0.035 from 1e-4
+  through 0.3 and *rises* to 0.052 at 1.0. Pushing harder on the alignment does
+  not achieve more alignment. That may be the more interesting finding.
+
+### 3b. At lambda = 0.3 the term is harmful
 
 | comparison | frame | metric | median | p |
 |---|---|---|---|---|
