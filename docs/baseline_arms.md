@@ -138,6 +138,104 @@ Which arm carries the claim in the paper: **`mid_fusion_wide`**. `mid_fusion`
 stays in as the un-widened reference so that the effect of width alone is
 visible rather than assumed away.
 
+## Results (all 45 runs complete, 2026-08-10)
+
+Cohort mean Dice per reference frame. The two frames have different ground-truth
+masks and are never compared with each other.
+
+| arm | WLI | NBI |
+|---|---|---|
+| single modality | 0.7180 | 0.7850 |
+| early fusion | 0.6301 | 0.7542 |
+| `mid_fusion` | 0.7194 | 0.8016 |
+| `mid_fusion_wide` | 0.7174 | 0.8011 |
+| `mmd_fusion` | 0.7185 | 0.7795 |
+| `ours` | 0.7158 | 0.7945 |
+
+### 1. The parameter-count objection is dead, empirically
+
+`mid_fusion_wide − mid_fusion`, paired over images:
+
+| frame | metric | median | p |
+|---|---|---|---|
+| WLI | Dice | −0.0000 | 0.595 |
+| NBI | Dice | −0.0006 | 0.762 |
+| WLI | bf3 | −0.0066 | 0.143 |
+| NBI | bf3 | −0.0001 | 0.495 |
+
+1.84 M extra parameters buy nothing measurable. The gap between the plain
+operator and the cross-attention operator was never a budget effect, and this
+says so with data rather than with an argument.
+
+### 2. Cross-attention does NOT beat bottleneck concatenation on region overlap
+
+The cohort means favour `mid_fusion` on NBI by 0.0071, and the paired test does
+not support it:
+
+| comparison | frame | Dice median | p |
+|---|---|---|---|
+| `mid_fusion` − `ours` | NBI | +0.0033 | 0.34 |
+| `mid_fusion_wide` − `ours` | NBI | +0.0015 | 0.33 |
+| `mid_fusion` − `ours` | WLI | +0.0063 | 0.10 |
+| `mid_fusion_wide` − `ours` | WLI | −0.0037 | 0.92 |
+
+**"The proposed operator is more accurate than bottleneck concatenation" cannot
+be claimed.** What separates the arms is the contour, not the region:
+
+| comparison | frame | bf3 median | p |
+|---|---|---|---|
+| `mid_fusion_wide` − `ours` | WLI | −0.0072 | 0.023 |
+| `mid_fusion_wide` − `ours` | NBI | −0.0090 | 0.052 |
+| `mid_fusion` − `ours` | NBI | −0.0066 | 0.19 |
+
+and the missed-lesion side, where `ours` is better than `mid_fusion` on NBI
+(`residual_area_frac` +0.0079, p = 0.015) while `mid_fusion` takes less normal
+tissue (`over_area_ratio` −0.0083, p = 0.008). For a resection margin the missed
+side is the one that matters.
+
+**These p values carry no multiple-comparison correction.** 0.023 does not
+survive Bonferroni over four metrics. The boundary advantage is suggestive, not
+established, and must be written that way.
+
+### 3. The MMD alignment term is harmful here
+
+| comparison | frame | metric | median | p |
+|---|---|---|---|---|
+| `mmd_fusion` − `mid_fusion` | NBI | Dice | −0.0097 | 0.0002 |
+| `mmd_fusion` − `mid_fusion` | NBI | bf3 | −0.0109 | 0.056 |
+| `mmd_fusion` − `ours` | NBI | Dice | −0.0056 | 0.0076 |
+| `mmd_fusion` − `ours` | NBI | bf3 | −0.0144 | 0.0009 |
+
+Same operator, same everything, one added loss term. On NBI it drops the arm
+from above the single-modality ceiling (0.7850) to below it: `mid_fusion` 0.8016
+and `mid_fusion_wide` 0.8011 clear it, `mmd_fusion` 0.7795 does not.
+
+A batch-level distribution alignment that is invariant to which WLI frame was
+paired with which NBI frame is not merely unhelpful on this cohort — it costs
+accuracy. Report the calibrated weight alongside the published 1e-4.
+
+### 4. What this does to the paper's framing
+
+Three independent dual arms now beat the single-modality baseline on NBI —
+`mid_fusion` +0.0108 (p = 0.0014), `mid_fusion_wide` +0.0112 (p = 0.0049),
+`ours` +0.0089 (p = 0.024) — and all three clear the baseline's all-threshold
+ceiling. The dual-versus-single claim is no longer one operator's result.
+
+The operator claim changes shape. It is not "cross-attention is the right
+operator". It is:
+
+> What decides the outcome is whether pixel-level correspondence is imposed.
+> Impose it at full resolution and the arm collapses; stop imposing it — at the
+> 1/32 grid or not at all — and region-overlap accuracy is the same. The residual
+> difference between those two is in contour quality, not in region overlap.
+
+That claim is more transferable than the original one, and it is the claim the
+misalignment measurement and the alignment-ceiling probe were already making.
+
+On the WLI frame every arm is within noise of the single-modality baseline, and
+the ceiling comparison there separates arms by less than 0.005 Dice. Read WLI as
+a null throughout rather than reading its ordering.
+
 ## Pre-registration note
 
 These arms were added **after** the main results were seen. `Methods 2.7` states
