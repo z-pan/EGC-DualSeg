@@ -32,3 +32,18 @@ results/scratch/
 wandb/
 runs/
 checkpoints_local/
+
+# Anything that maps a packaged image back to the archive. These carry the
+# per-patient directory structure of the source data (case folders, per-case
+# file names) and the local absolute paths to it. The index files are a patient-
+# level index of the cohort's imaging; the script that builds them hardcodes the
+# archive layout. None of it is needed to reproduce a figure from the committed
+# CSVs, and all of it is a privacy liability in a public repository.
+outputs/raw_image_index.csv
+outputs/figure_raw_images.txt
+scripts/raw_image_path.py
+
+# Zipped copies of CSVs that are already committed file-by-file under results/.
+# They were transfer archives from Colab; keeping them would double the repo for
+# no reproducibility gain.
+*_csvs.zip
