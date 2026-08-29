@@ -47,3 +47,11 @@ scripts/raw_image_path.py
 # They were transfer archives from Colab; keeping them would double the repo for
 # no reproducibility gain.
 *_csvs.zip
+
+# Rendered figures are build products, not sources. Some of them (Fig. 3d, the
+# exemplar panels) contain endoscopic frames, so they must not be committed to a
+# public repository even as output. Run the scripts to regenerate.
+figures/*.png
+figures/*.pdf
+figures/*.tiff
+figures/*.svg
