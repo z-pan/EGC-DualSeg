@@ -4,7 +4,7 @@
 Med-X requires a graphical abstract, at a minimum of 531 x 1328 px (h x w),
 legible at 13 x 5 cm, and explicitly **not** taken from the figures inside the
 article. This one therefore shares no panel with Figs. 1-5: the misalignment is
-drawn as two outlines rather than as the distribution in Fig. 1b, the
+drawn as two outlines rather than as the distribution in Fig. 2b, the
 correspondence ladder is a schematic that appears nowhere in the paper, and the
 outcome is a signed change against the single-frame baseline rather than the
 Dice boxes of Fig. 3a.

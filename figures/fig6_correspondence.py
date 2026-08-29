@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 6 | Does fusion gain track how well the two views correspond?
+"""Supplementary Fig. S3 | Does fusion gain track how well the two views correspond?
 
 Panels
   a  Per-image fusion gain against cross-modal correspondence, both frames.

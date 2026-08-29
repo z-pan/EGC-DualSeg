@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 2 | Effective spatial resolution delimits measurable pathology.
+"""Supplementary Fig. S1 | Effective spatial resolution delimits measurable pathology.
 
 Panels
   a  Scale-calibrated near-focus NBI crops at a common physical field of view,
@@ -21,7 +21,7 @@ makes the exclusion argument in c conservative.
 Backend: Python / matplotlib (project default).
 Output: fig2_resolution.{svg,pdf,tiff,png}
 
-Palette discipline (shared with Fig. 1)
+Palette discipline (shared with fig1_misalignment)
   Blue / teal   -> modality identity (WLI / NBI) ONLY
   Neutral greys -> view type and generic distributions
   Red           -> reference lines, limits, exclusions
@@ -229,7 +229,7 @@ for col, r in enumerate(picks):
         ax.text(-0.16, 1.06, "a", transform=ax.transAxes, fontsize=12,
                 fontweight="bold", ha="left", va="bottom")
 
-# -- b : paired per-lesion resolution, same idiom as Fig. 1d ---------------
+# -- b : paired per-lesion resolution, same idiom as fig1_misalignment d --
 # the two modalities are measured on the SAME lesion, so a paired scatter
 # against y = x is more informative than two overlapping histograms.
 axb = fig.add_subplot(gs[1, 0])

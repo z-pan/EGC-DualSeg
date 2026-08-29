@@ -19,8 +19,8 @@ python scripts/make_supplementary.py
 
 | Script | Manuscript item | Runs from this repository alone |
 |---|---|---|
-| `fig1_misalignment.py` | Fig. 1, spatial correspondence | **no** — needs the image archive |
-| `fig3_framework.py` | Fig. 2, framework and cohort flow | **no** — needs the image archive |
+| `fig3_framework.py` | Fig. 1, framework and cohort flow | **no** — needs the image archive |
+| `fig1_misalignment.py` | Fig. 2, spatial correspondence | **no** — needs the image archive |
 | `fig2_fusion_operator.py` | Fig. 3, fusion scheme comparison | yes |
 | `fig3_dual_vs_single.py` | Fig. 4, dual versus single modality | yes |
 | `fig5_pathology.py` | Fig. 5, resection-pathology endpoints | yes |
@@ -32,7 +32,7 @@ python scripts/make_supplementary.py
 
 Seven of the ten reproduce end to end from what is committed here. The three
 that do not are the ones that display endoscopic frames: the exemplar pairs in
-Fig. 1a, the pipeline schematic in Fig. 2, and the scale-calibrated views in
+Fig. 2a, the pipeline schematic in Fig. 1, and the scale-calibrated views in
 Fig. S1.
 
 ## The images are not in this repository
@@ -47,7 +47,7 @@ EGC_RAW=/path/to/archive python figures/fig1_misalignment.py
 Everything derived from those images that is *not* identifiable is committed:
 the per-image segmentation and boundary read-outs under `results/`, the
 patient-level comparison table in `outputs/patient_level.csv`, and the
-cross-modal correspondence statistics that Fig. 1b–d summarise. A reader can
+cross-modal correspondence statistics that Fig. 2b–d summarise. A reader can
 therefore check every statistic in the paper without access to the images, and
 can reproduce every figure whose content is a statistic rather than a photograph.
 

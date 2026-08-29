@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 1 | Paired WLI-NBI frames of the same lesion are spatially unaligned.
+"""Fig. 2 | Paired WLI-NBI frames of the same lesion are spatially unaligned.
 
 Core conclusion this figure must defend
 ---------------------------------------

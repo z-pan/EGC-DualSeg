@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 3 | The gain over a single-modality baseline is on the contour, not the area.
+"""Fig. 4 | The gain over a single-modality baseline is on the contour, not the area.
 
 Core conclusion this figure must defend
 ---------------------------------------
@@ -40,7 +40,7 @@ Data: EGC-DualSeg results/predictions_*.csv, results/boundary_*.csv,
 Backend: Python / matplotlib (project default).
 Output: fig3_dual_vs_single.{svg,pdf,tiff,png}
 
-Palette discipline (shared with Fig. 1, Fig. 2, Fig. 5)
+Palette discipline (shared with fig1_misalignment, fig2_fusion_operator, fig5_pathology)
   Blue / teal are EXCLUSIVELY frame identity -- white light versus narrow band.
   Red is reserved for reference lines and the zero line; grey for neutral
   annotation and for a contrast that did not separate.

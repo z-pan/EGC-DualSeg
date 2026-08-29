@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 3 | Two-stage dual-modal framework and cohort construction.
+"""Fig. 1 | Two-stage dual-modal framework and cohort construction.
 
 Panels
   a  Pipeline schematic. Stage 1 localises the lesion from the paired input;
@@ -14,7 +14,7 @@ Panels
 Backend: Python / matplotlib (project default).
 Output: fig3_framework.{svg,pdf,tiff,png}
 
-Palette discipline (shared with Fig. 1-2)
+Palette discipline (shared with fig1_misalignment, fig2_fusion_operator)
   Blue / teal   -> modality identity (WLI / NBI) ONLY
   Neutral greys -> generic blocks and flow
   Red           -> exclusions and weak-supervision caution

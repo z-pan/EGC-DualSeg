@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fig. 2 | The fusion scheme, not the second modality, decides the outcome.
+"""Fig. 3 | The fusion scheme, not the second modality, decides the outcome.
 
 Core conclusion this figure must defend
 ---------------------------------------
