@@ -33,9 +33,10 @@ reach r = 0.44-0.49 at the tightest tolerances, so the expectation was only
 half right and the printed correlation is worth reading.
 
 What that correlation does and does not invalidate: it rules the metric out for
-*correlational* work — relating fusion gain to lesion size, the mistake Fig. 6
-already caught — and it does not touch the paired comparisons here, which match
-arms on the same image, so any size effect common to both cancels.
+*correlational* work — relating fusion gain to lesion size, the mistake that
+Supplementary Fig. S3 already caught — and it does not touch the paired
+comparisons here, which match arms on the same image, so any size effect common
+to both cancels.
 
 Status of this axis
 -------------------

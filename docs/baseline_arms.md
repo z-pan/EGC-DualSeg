@@ -98,8 +98,8 @@ The summarise scripts glob `results/*.csv` and pick up new configs
 automatically, but the two per-image passes must be run for the new arms first:
 
 ```bash
-python scripts/boundary_metrics.py    # boundary_*.csv  -> Fig. 2b, Fig. 3c
-python scripts/threshold_sweep.py     # sweep_*.csv     -> Fig. 2c, Fig. 3b
+python scripts/boundary_metrics.py    # boundary_*.csv  -> Fig. 3, Fig. 4
+python scripts/threshold_sweep.py     # sweep_*.csv     -> Fig. 3c
 python scripts/summarise.py
 python scripts/summarise_boundary.py
 python scripts/summarise_clinical.py
@@ -289,9 +289,10 @@ better model, not a better threshold"* and the other only *"wins on one axis
 only"*. The verdict is computed by matching **cohort means**, the very quantity
 shown above to be fragile.
 
-That does not overturn the ceiling argument in Fig. 3b, but it constrains how it
-may be written: the sweep returns a category label, not an estimate with an
-interval, and adjacent categories can be separated by noise. Report the ceiling
+That does not overturn the ceiling argument, whose own panel was retired from
+Fig. 4 on 2026-08-24 because the baseline’s best threshold is 0.5 anyway, but it
+constrains how it may be written: the sweep returns a category label, not an
+estimate with an interval, and adjacent categories can be separated by noise. Report the ceiling
 comparison as the numeric gap it is, and do not lean on the verdict wording.
 
 ### 4. What this does to the paper's framing
