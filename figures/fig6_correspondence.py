@@ -232,7 +232,7 @@ for frame, spec in FRAMES.items():
     prho, pp = partial_spearman(sub.mi_delta.to_numpy(), sub.gain.to_numpy(),
                                 sub.gt_area_frac.to_numpy())
     notes.append((spec["colour"],
-                  f"{frame}   rho = {rho:+.2f},  partial = {prho:+.2f}"))
+                  f"{frame}   ρ = {rho:+.2f},  partial = {prho:+.2f}"))
     all_p += [p, pp]
     stats_a.append((frame, rho, p, prho, pp))
 

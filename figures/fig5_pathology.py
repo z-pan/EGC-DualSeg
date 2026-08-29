@@ -328,7 +328,7 @@ key = "\n".join(f"{lab:<22s}{rho:+.2f}   p = {p:.3f}"
                  for lab, rho, p, _ in extent_stats)
 n_ext = extent_stats[0][3] if extent_stats else 0
 axa.text(0.975, 0.035,
-         f"Spearman rho, n = {n_ext} patients\n" + key,
+         f"Spearman's ρ, n = {n_ext} patients\n" + key,
          transform=axa.transAxes, ha="right", va="bottom", fontsize=6.2,
          family="monospace", color=C_NEU, linespacing=1.45, zorder=6,
          bbox=dict(fc="white", ec=C_NEU, lw=0.4, alpha=0.92, pad=3.0))
