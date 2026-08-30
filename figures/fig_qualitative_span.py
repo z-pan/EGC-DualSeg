@@ -20,10 +20,11 @@ not separate on area (Results 3.4). Both of those comparisons are made, with the
 nulls, in Fig. 3 and Fig. 4. Here the reader sees the one contrast that does
 separate.
 
-Rows come from the recorded span rule, not from inspection. Across all seven
-percentiles the proposed scheme is ahead of channel concatenation on twelve of
-fourteen; the five drawn here are an evenly spaced subset of those seven, chosen
-before the scores were looked at.
+Rows come from the recorded span rule, not from inspection, and all seven
+percentiles the dump recorded are drawn: there is no subset to have chosen. The
+proposed scheme leads channel concatenation in twelve of the fourteen. The two it
+does not are kept, because dropping them would be selection by outcome; both are
+on the white-light frame, where no metric separated, and both are within 0.03 Dice.
 
 Every mask is a held-out prediction from the fold that excluded its patient, and
 the Dice printed is the mean over the three training seeds, matching how every
@@ -76,9 +77,11 @@ C_NEU = "#767676"       # channel concatenation
 MM = 1 / 25.4
 FIGW = 180 * MM          # height is computed from the tile aspect ratios
 
-ROWS = ["span-p10", "span-p25", "span-p50", "span-p75", "span-p90"]
-ROW_LABEL = {"span-p10": "10th", "span-p25": "25th", "span-p50": "50th",
-             "span-p75": "75th", "span-p90": "90th"}
+ROWS = ["span-p5", "span-p10", "span-p25", "span-p50", "span-p75",
+        "span-p90", "span-p95"]
+ROW_LABEL = {"span-p5": "5th", "span-p10": "10th", "span-p25": "25th",
+             "span-p50": "50th", "span-p75": "75th", "span-p90": "90th",
+             "span-p95": "95th"}
 
 FRAMES = [
     ("WLI", C_WLI, "early_fusion_wli", "white light"),
