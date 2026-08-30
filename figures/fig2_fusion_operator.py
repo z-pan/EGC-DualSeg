@@ -519,11 +519,6 @@ if picks:
     fig.text(TITLE_X, 0.375, "d  Where channel concatenation loses most", fontsize=8,
              fontweight="bold", va="bottom")
 
-fig.text(TITLE_X, -0.012,
-         "The two frames have different ground-truth masks and are never pooled "
-         "or ranked against each other.",
-         fontsize=6, color=C_NEU)
-
 base = os.path.join(OUT, "fig2_fusion_operator")
 fig.savefig(base + ".svg", bbox_inches="tight")
 fig.savefig(base + ".pdf", bbox_inches="tight")

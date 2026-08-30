@@ -255,13 +255,8 @@ box(axb, 0.545, 0.515, 0.420, 0.290,
     "Resection pathology\n\ngrade  |  depth\nextent  |  type",
     fc="white", ec=C_GRN, tc=C_DARK, fs=7.4, lw=1.4)
 
-axb.add_patch(Rectangle((0.030, 0.085), 0.935, 0.290, fc="#F4F4F4",
-                        ec=C_NEU, lw=0.9, zorder=0))
-for j, line in enumerate(["Stage-1 masks are delineated within each",
-                          "modality's own frame; the modality comparison",
-                          "is therefore also evaluated on the Stage-2 target."]):
-    axb.text(0.498, 0.300 - j * 0.075, line, fontsize=7.2, color=C_DARK,
-             ha="center", va="center")
+# The sentence that stood here is caption text; it lives in the Fig. 1
+# legend in draft_v0.1.md.
 
 # =========================== c : cohort flow ==============================
 axc = fig.add_subplot(gs[1, 1]); blank(axc); plabel(axc, "c", x=-0.01, y=0.99)
@@ -293,9 +288,7 @@ arrow(axc, 0.700, 0.263, 0.700, 0.202, color=C_NEU)
 box(axc, 0.505, 0.100, 0.400, 0.115,
     "positive control\n45 with macroscopic type",
     fc="white", ec=C_NEU, tc=C_NEU, fs=7.0)
-axc.text(0.020, 0.210,
-         "10 multifocal patients; the 4\nwith a separate measurement\nper lesion are excluded from\nthe extent analysis, 2 retained",
-         fontsize=6.9, color=C_SIG, va="top", linespacing=1.32)
+# The multifocal exclusion is stated in the Fig. 1 legend, not drawn here.
 
 check_boxes(fig)
 

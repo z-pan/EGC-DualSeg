@@ -23,8 +23,8 @@ python scripts/make_supplementary.py
 | `fig1_misalignment.py` | Fig. 2, spatial correspondence | **no** — needs the image archive |
 | `fig2_fusion_operator.py` | Fig. 3, fusion scheme comparison | yes |
 | `fig3_dual_vs_single.py` | Fig. 4, dual versus single modality | yes |
-| `fig5_pathology.py` | Fig. 5, resection-pathology endpoints | yes |
-| `fig_qualitative_span.py` | Fig. 6, delineations across the range | **no** — needs the image archive |
+| `fig5_pathology.py` | Fig. 6 and Supplementary Fig. S4 | yes |
+| `fig_qualitative_span.py` | Fig. 5, delineations across the range | **no** — needs the image archive |
 | `fig2_resolution.py` | Fig. S1, effective resolution | **no** — needs the image archive |
 | `figS2_mmd_sweep.py` | Fig. S2, distribution-alignment sweep | yes |
 | `fig6_correspondence.py` | Fig. S3, gain against correspondence | yes |

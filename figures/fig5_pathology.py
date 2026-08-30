@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Fig. 5 | Endpoints taken from the resection pathology report.
+"""Fig. 6 | Predicted lesion extent against the resection specimen,
+plus Supplementary Fig. S4 | grade ROC and its positive control.
 
 Core conclusion this figure must defend
 ---------------------------------------
@@ -276,9 +277,16 @@ require(macro, "macro")
 # Three panels, in the order Section 3.5 makes its argument: the positive,
 # annotation-independent result first, then the endpoint that did not separate,
 # then the control that explains why it did not.
-fig = plt.figure(figsize=(FIGW, FIGH * 0.62))
-gs = GridSpec(1, 3, figure=fig, width_ratios=[1.24, 0.88, 0.88],
-              wspace=0.46, left=0.070, right=0.985, top=0.82, bottom=0.19)
+# Main text keeps the extent correlation, which is the only one of the three
+# that is evidence rather than a null or a control.
+fig = plt.figure(figsize=(FIGW * 0.52, FIGH * 0.62))
+gs = GridSpec(1, 1, figure=fig,
+              left=0.185, right=0.980, top=0.855, bottom=0.185)
+
+# Supplementary carries the grade endpoint and the control that reads it.
+fig_si = plt.figure(figsize=(FIGW * 0.72, FIGH * 0.62))
+gs_si = GridSpec(1, 2, figure=fig_si, wspace=0.34,
+                 left=0.090, right=0.985, top=0.82, bottom=0.19)
 
 # ---- a: lesion extent against the resection specimen ----------------------
 # Four configurations are compared, but only the proposed one is scattered:
@@ -320,10 +328,7 @@ axa.set_xticklabels(["3", "5", "10", "20", "30"])
 axa.set_ylim(14, 95)
 axa.set_xlabel("Microscopic long axis of the specimen (mm, log scale)", fontsize=8)
 axa.set_ylabel("Predicted long axis\n(% of field width)", fontsize=8)
-axa.set_title("Lesion extent", fontsize=9.5, pad=17)
-axa.text(0.5, 1.015, "no clinician mask enters either axis",
-         transform=axa.transAxes, ha="center", va="bottom",
-         fontsize=7.4, color=C_NEU)
+axa.set_title("Lesion extent", fontsize=9.5, pad=8)
 key = "\n".join(f"{lab:<22s}{rho:+.2f}   p = {p:.3f}"
                  for lab, rho, p, _ in extent_stats)
 n_ext = extent_stats[0][3] if extent_stats else 0
@@ -332,20 +337,20 @@ axa.text(0.975, 0.035,
          transform=axa.transAxes, ha="right", va="bottom", fontsize=6.2,
          family="monospace", color=C_NEU, linespacing=1.45, zorder=6,
          bbox=dict(fc="white", ec=C_NEU, lw=0.4, alpha=0.92, pad=3.0))
-panel_label(axa, PANELS[0], x=-0.24, y=1.04)
+# no panel letter: the main-text figure now has a single panel
 
 # ---- b: grade ROC ---------------------------------------------------------
-axb = fig.add_subplot(gs[0, 1])
+axb = fig_si.add_subplot(gs_si[0, 0])
 n_grade = grade[grade.config == ARMS[0][0]].shape[0]
 entries_grade = draw_roc(
-    axb, grade, PANELS[1], "Histological grade",
+    axb, grade, PANELS[0], "Histological grade",
     subtitle=f"n = {n_grade} patients, one ground truth for all")
 
 # ---- c: positive control --------------------------------------------------
-axc = fig.add_subplot(gs[0, 2])
+axc = fig_si.add_subplot(gs_si[0, 1])
 n_macro = macro[macro.config == ARMS[0][0]].shape[0]
 entries_macro = draw_roc(
-    axc, macro, PANELS[2], "Macroscopic type (control)",
+    axc, macro, PANELS[1], "Macroscopic type (control)",
     subtitle=f"n = {n_macro}, declared at the design stage")
 
 # The paired within-frame contrasts are no longer drawn, but they are still
@@ -362,12 +367,14 @@ for frame, (single, dual) in FRAME_PAIRS.items():
                                      np.asarray(p_s)[idx_s])
     frame_stats[frame] = dict(delta=delta, z=z, p=p, n=len(common))
 
-base = os.path.join(OUT, "fig5_pathology")
-fig.savefig(base + ".svg", bbox_inches="tight")
-fig.savefig(base + ".pdf", bbox_inches="tight")
-fig.savefig(base + ".tiff", dpi=600, bbox_inches="tight")
-fig.savefig(base + ".png", dpi=600, bbox_inches="tight")
-plt.close(fig)
+for f, stem in ((fig, "fig5_pathology"), (fig_si, "figS4_grade_roc")):
+    b = os.path.join(OUT, stem)
+    f.savefig(b + ".svg", bbox_inches="tight")
+    f.savefig(b + ".pdf", bbox_inches="tight")
+    f.savefig(b + ".tiff", dpi=600, bbox_inches="tight")
+    f.savefig(b + ".png", dpi=600, bbox_inches="tight")
+    plt.close(f)
+    print("saved -> %s.{svg,pdf,tiff,png}" % stem)
 
 # ---- console record -------------------------------------------------------
 print(f"grade: n = {n_grade} patients   macro control: n = {n_macro}")

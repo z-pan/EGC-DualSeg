@@ -297,11 +297,6 @@ axc.annotate("", xy=(nb[2], -1.40), xytext=(0, -1.40),
 axc.text(nb[2] / 2, -1.52, f"improvement > {nb[2]:.3f} excluded",
          fontsize=5.9, color=C_NEU, ha="center", va="top")
 
-fig.text(0.075, -0.045,
-         "All comparisons are paired within a patient (n = 77). The two frames "
-         "have different ground-truth masks and are never pooled or ranked "
-         "against each other.", fontsize=6, color=C_NEU)
-
 base = os.path.join(OUT, "fig3_dual_vs_single")
 for ext, kw in ((".svg", {}), (".pdf", {}), (".png", dict(dpi=600)),
                 (".tiff", dict(dpi=600))):
