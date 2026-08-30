@@ -272,7 +272,7 @@ box(axc, 0.530, 0.100, 0.340, 0.102,
     "positive control\n45 with macroscopic type",
     fc="white", ec=C_NEU, tc=C_NEU, fs=7.0)
 axc.text(0.020, 0.210,
-         "3 multifocal resections with\ndiscordant per-lesion labels\nexcluded from lesion-level\nanalyses",
+         "10 multifocal patients; the 4\nwith a separate measurement\nper lesion are excluded from\nthe extent analysis, 2 retained",
          fontsize=6.9, color=C_SIG, va="top", linespacing=1.32)
 
 base = os.path.join(OUT, "fig3_framework")
