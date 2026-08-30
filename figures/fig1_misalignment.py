@@ -87,6 +87,7 @@ C_PALE = "#BFBFBF"
 C_SIG = "#B64342"      # medians / reference lines
 C_NEU = "#767676"
 C_CONTOUR = (255, 215, 0)   # gold lesion contour, legible on pink and green mucosa
+C_HALO = (20, 20, 20)       # neutral rim under it; adds no hue to the palette
 
 MM = 1 / 25.4
 FINAL_WIDTH_MM = 180          # double-column
@@ -166,10 +167,11 @@ def tile(img_path, size=560):
         er[1:-1, 1:-1] = (M[1:-1, 1:-1] & M[:-2, 1:-1] & M[2:, 1:-1]
                           & M[1:-1, :-2] & M[1:-1, 2:])
         edge = M & ~er
-        k = max(1, int(round(min(a.shape[:2]) / 380)))
-        for dy in range(-k, k + 1):
-            for dx in range(-k, k + 1):
-                a[np.roll(np.roll(edge, dy, 0), dx, 1)] = C_CONTOUR
+        k = max(2, int(round(min(a.shape[:2]) / 190)))
+        for r, col in ((k + 2, C_HALO), (k, C_CONTOUR)):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    a[np.roll(np.roll(edge, dy, 0), dx, 1)] = col
     h, w = a.shape[:2]
     s = min(h, w)
     y0, x0 = (h - s) // 2, (w - s) // 2

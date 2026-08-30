@@ -161,10 +161,11 @@ def demo_tile(mod, draw="none", size=320):
         er[1:-1, 1:-1] = (M[1:-1, 1:-1] & M[:-2, 1:-1] & M[2:, 1:-1]
                           & M[1:-1, :-2] & M[1:-1, 2:])
         edge = M & ~er
-        k = max(1, int(round(min(im.shape[:2]) / 260)))
-        for dy in range(-k, k + 1):
-            for dx in range(-k, k + 1):
-                im[np.roll(np.roll(edge, dy, 0), dx, 1)] = (255, 215, 0)
+        k = max(2, int(round(min(im.shape[:2]) / 140)))
+        for r, col in ((k + 2, (20, 20, 20)), (k, (255, 215, 0))):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    im[np.roll(np.roll(edge, dy, 0), dx, 1)] = col
     h, w = im.shape[:2]
     s = min(h, w)
     oy, ox = (h - s) // 2, (w - s) // 2

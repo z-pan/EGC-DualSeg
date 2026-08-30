@@ -40,6 +40,7 @@ Palette discipline (shared with fig1_misalignment, fig2_fusion_operator)
   Gold        -> the reference contour, as in fig1_misalignment. Red is not
                  usable here: it disappears against white-light mucosa.
   Grey        -> channel concatenation, which is not the proposed scheme.
+  Every contour carries a neutral dark rim so it reads on either mucosa.
 """
 import os
 import sys
@@ -104,12 +105,19 @@ def outline(mask, width=2):
     return e
 
 
+C_HALO = "#141414"      # neutral rim; adds no hue, so the palette rule holds
+PEN, RIM = 4, 3         # colour width, and how far the rim extends past it
+
+
 def draw(ax, img, contours):
+    """Each contour as a dark rim with the colour laid over it, so the line reads
+    on pink mucosa and on dark green alike."""
     ax.imshow(img)
     for mask, colour in contours:
-        ov = np.zeros(img.shape[:2] + (4,), float)
-        ov[outline(mask)] = (*matplotlib.colors.to_rgb(colour), 1.0)
-        ax.imshow(ov)
+        for w, c, a in ((PEN + RIM, C_HALO, 0.85), (PEN, colour, 1.0)):
+            ov = np.zeros(img.shape[:2] + (4,), float)
+            ov[outline(mask, w)] = (*matplotlib.colors.to_rgb(c), a)
+            ax.imshow(ov)
     ax.set_xticks([]); ax.set_yticks([])
 
 

@@ -149,12 +149,22 @@ def p_text(p):
     return "p < 0.0001" if p < 1e-4 else f"p = {p:.3f}"
 
 
-def outline(mask):
-    """One-pixel boundary of a binary mask."""
+C_REF = "#FFD700"        # gold reference contour, as in fig1_misalignment
+C_HALO = "#141414"       # neutral rim; adds no hue, so the palette rule holds
+PEN, RIM = 4, 3          # colour width, and how far the rim extends past it
+
+
+def outline(mask, width=1):
+    """Boundary of a binary mask, thickened so it survives downsampling."""
     m = mask.astype(bool)
     e = np.zeros_like(m)
     e[1:, :] |= m[1:, :] ^ m[:-1, :]
     e[:, 1:] |= m[:, 1:] ^ m[:, :-1]
+    for _ in range(width - 1):
+        g = np.zeros_like(e)
+        g[1:, :] |= e[:-1, :]; g[:-1, :] |= e[1:, :]
+        g[:, 1:] |= e[:, :-1]; g[:, :-1] |= e[:, 1:]
+        e |= g
     return e
 
 
@@ -479,7 +489,7 @@ if picks:
         img = images[row][y0:y1, x0:x1]
         gt = masks[row][y0:y1, x0:x1] > 127
 
-        panels = [("Ground truth", None, C_SIG),
+        panels = [("Ground truth", None, C_REF),
                   ("Channel concat.", spec["early"], C_NEU),
                   ("Proposed", FUSION, spec["colour"])]
         for ci, (title, cfg, colour) in enumerate(panels):
@@ -497,10 +507,10 @@ if picks:
                     ax.axis("off"); continue
                 pred = np.array(Image.open(path)) > 0
                 pred = pred[y0:y1, x0:x1]
-            ov = np.zeros(img.shape[:2] + (4,), float)
-            rgb = matplotlib.colors.to_rgb(colour)
-            ov[outline(pred)] = (*rgb, 1.0)
-            ax.imshow(ov)
+            for w, c, alpha in ((PEN + RIM, C_HALO, 0.85), (PEN, colour, 1.0)):
+                ov = np.zeros(img.shape[:2] + (4,), float)
+                ov[outline(pred, w)] = (*matplotlib.colors.to_rgb(c), alpha)
+                ax.imshow(ov)
             ax.set_xticks([]); ax.set_yticks([])
             for s in ax.spines.values():
                 s.set_edgecolor(spec["colour"]); s.set_linewidth(0.9)
