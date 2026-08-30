@@ -82,8 +82,10 @@ FRAMES = [
     ("WLI", C_WLI, "wli_only", "early_fusion_wli", "white light"),
     ("NBI", C_NBI, "nbi_only", "early_fusion_nbi", "narrow band"),
 ]
-COLS = ["Reference contour", "Single modality",
-        "Channel concatenation", "Proposed"]
+BOTTLENECK = "mid_fusion"     # drawn only when every tile has its mask
+COLS_BASE = ["Reference contour", "Single modality",
+             "Channel concatenation", "Proposed"]
+COL_BOTTLENECK = "Bottleneck concatenation"
 
 
 def outline(mask, width=2):
@@ -125,8 +127,21 @@ def main():
     blob = np.load(NPZ)
     images, masks = blob["images"], blob["masks"]
 
+    # The bottleneck column is optional: scripts/dump_fig5_midfusion.py adds
+    # its masks later, and until every tile has one the column is left out
+    # rather than drawn half empty.
+    tiles = [(f[0], r) for f in FRAMES for r in ROWS]
+    have_bn = all(
+        not idx[(idx.ref_modality == fr) & (idx.rule == rule)
+                & (idx.config == BOTTLENECK)].empty
+        for fr, rule in tiles)
+    cols = (COLS_BASE[:3] + [COL_BOTTLENECK] + COLS_BASE[3:]
+            if have_bn else COLS_BASE)
+    print("bottleneck column: %s" % ("drawn" if have_bn else
+                                     "absent, masks not dumped yet"))
+
     fig = plt.figure(figsize=(FIGW, FIGH))
-    gs = GridSpec(len(FRAMES) * len(ROWS), len(COLS), figure=fig,
+    gs = GridSpec(len(FRAMES) * len(ROWS), len(cols), figure=fig,
                   left=0.085, right=0.995, top=0.962, bottom=0.048,
                   hspace=0.05, wspace=0.03)
 
@@ -145,7 +160,9 @@ def main():
             img = images[row_of[key]][y0:y1, x0:x1]
             gt = masks[row_of[key]][y0:y1, x0:x1] > 127
 
-            for ci, cfg in enumerate([None, single, early, "ours"]):
+            chain = ([None, single, early, BOTTLENECK, "ours"] if have_bn
+                     else [None, single, early, "ours"])
+            for ci, cfg in enumerate(chain):
                 ax = fig.add_subplot(gs[r, ci])
                 if cfg is None:
                     draw(ax, img, [(gt, C_REF)])
@@ -160,7 +177,10 @@ def main():
                     pred = (np.array(Image.open(path)) > 0)[y0:y1, x0:x1]
                     pen = colour if cfg == "ours" else C_NEU
                     draw(ax, img, [(gt, C_REF), (pred, pen)])
-                    d = float(hit.iloc[0]["dice_seed_mean"])
+                    row = hit.iloc[0]
+                    d = row["dice_seed_mean"]
+                    d = float(row["dice_this_seed"] if d in ("", None)
+                              or (isinstance(d, float) and d != d) else d)
                     ax.text(0.035, 0.035, "Dice %.2f" % d, transform=ax.transAxes,
                             ha="left", va="bottom", fontsize=6.6, color="white",
                             fontweight="bold",
@@ -169,7 +189,7 @@ def main():
                 for s in ax.spines.values():
                     s.set_edgecolor(colour); s.set_linewidth(1.0)
                 if r == 0:
-                    ax.set_title(COLS[ci], fontsize=7.4, pad=4.0,
+                    ax.set_title(cols[ci], fontsize=7.4, pad=4.0,
                                  color="black" if ci else "#8A6D00")
                 if ci == 0:
                     ax.text(-0.055, 0.5, ROW_LABEL[rule], transform=ax.transAxes,
