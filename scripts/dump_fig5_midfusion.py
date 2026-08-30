@@ -30,7 +30,7 @@ import yaml
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "scripts"))
-from dump_exemplars import dump_for, FIELDS                # noqa: E402
+from dump_exemplars import dump_for, load_predictions, FIELDS   # noqa: E402
 
 CONFIG = "configs/mid_fusion.yaml"
 SEG_NAME = "mid_fusion"
@@ -83,6 +83,10 @@ def main() -> int:
     print("device: %s | %d tile(s) over %d checkpoint(s)"
           % (device.type, len(wanted), len(need)))
 
+    # Fig. 5 prints the seed-averaged Dice in every other column, so this one
+    # must carry the same quantity rather than the single rendered seed.
+    seed_mean = load_predictions(args.results)
+
     new_rows = []
     for frame, fold, seed in need:
         targets = {(w[1], w[2]) for w in wanted
@@ -93,10 +97,12 @@ def main() -> int:
             src = next(w for w in wanted if w[1] == r["case"] and w[2] == r["scale"]
                        and w[0] == r["ref_modality"])
             r["rule"] = src[5]
-            r["dice_seed_mean"] = ""     # one seed only; the figure prints this seed
+            m = seed_mean.get((r["case"], r["scale"], r["ref_modality"], SEG_NAME))
+            r["dice_seed_mean"] = "" if m is None else round(float(m), 6)
             new_rows.append(r)
-            print("  %s %s %s  dice %.3f" % (frame, r["case"], r["scale"],
-                                             r["dice_this_seed"]))
+            print("  %s %s %s  seed-mean %s (this seed %.3f)"
+                  % (frame, r["case"], r["scale"], r["dice_seed_mean"],
+                     r["dice_this_seed"]))
 
     with open(index_path, "a", encoding="utf-8-sig", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)

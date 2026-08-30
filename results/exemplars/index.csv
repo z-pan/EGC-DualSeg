@@ -1,4 +1,4 @@
-case,scale,ref_modality,config,fold,seed,rule,dice_this_seed,dice_seed_mean,path
+﻿case,scale,ref_modality,config,fold,seed,rule,dice_this_seed,dice_seed_mean,path
 病例11,far,NBI,early_fusion_nbi,4,0,span-p50,0.815689,0.751441,pred_early_fusion_nbi_病例11_far_refNBI_seed0.png
 病例12,near,NBI,early_fusion_nbi,1,0,contrast-early,0.099377,0.1106,pred_early_fusion_nbi_病例12_near_refNBI_seed0.png
 病例25,far,NBI,early_fusion_nbi,2,0,span-p75,0.752988,0.825675,pred_early_fusion_nbi_病例25_far_refNBI_seed0.png
@@ -65,3 +65,9 @@ case,scale,ref_modality,config,fold,seed,rule,dice_this_seed,dice_seed_mean,path
 病例69,far,WLI,wli_only,0,0,span-p5,0.363902,0.248388,pred_wli_only_病例69_far_refWLI_seed0.png
 病例70,far,WLI,wli_only,2,0,span-p25,0.821007,0.598336,pred_wli_only_病例70_far_refWLI_seed0.png
 病例80,near,WLI,wli_only,1,0,span-p95,0.908276,0.928657,pred_wli_only_病例80_near_refWLI_seed0.png
+病例9,near,NBI,mid_fusion,0,0,span-p10,0.728191,0.722504,pred_mid_fusion_病例9_near_refNBI_seed0.png
+病例60,far,NBI,mid_fusion,3,0,span-p90,0.981052,0.9664,pred_mid_fusion_病例60_far_refNBI_seed0.png
+病例11,far,NBI,mid_fusion,4,0,span-p50,0.853432,0.808116,pred_mid_fusion_病例11_far_refNBI_seed0.png
+病例48,far,WLI,mid_fusion,3,0,span-p10,0.551865,0.493352,pred_mid_fusion_病例48_far_refWLI_seed0.png
+病例50,near,WLI,mid_fusion,3,0,span-p50,0.759127,0.776056,pred_mid_fusion_病例50_near_refWLI_seed0.png
+病例65,near,WLI,mid_fusion,3,0,span-p90,0.896634,0.912884,pred_mid_fusion_病例65_near_refWLI_seed0.png
