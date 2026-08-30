@@ -1,26 +1,33 @@
 # -*- coding: utf-8 -*-
-"""Fig. 6 | Delineations across the performance range, three schemes side by side.
+"""Fig. 5 | What the pixel-correspondence assumption costs, across the range.
 
 Why this figure exists
 ----------------------
-Fig. 3d already shows the frames where channel concatenation loses most, which is
-the extreme of the distribution. What the paper has nowhere is what a typical
-delineation looks like, and a reader who cannot judge a boxplot by eye has no way
-to see whether any of these models is usable. This figure fills that gap.
+Fig. 3d shows the frames where channel concatenation loses most, which is the
+extreme of the distribution. A reader who cannot judge a boxplot by eye still has
+no way to see whether that loss is confined to the extreme or runs through the
+cohort. This figure answers that: five percentiles of the proposed scheme's
+per-image Dice in each reference frame, the same contrast in every row.
 
-Rows are chosen by the recorded span rule, not by inspection: the 10th, 50th and
-90th percentile of the proposed scheme's per-image Dice within each reference
-frame. That is a deliberately unflattering selection, and it shows cases where the
-single-modality baseline matches or beats the proposed scheme, which is what
-Results 3.4 reports.
+Why only two configurations
+---------------------------
+The claim this figure carries is Fig. 3's: imposing a correspondence the frames do
+not have costs more than the second frame contributes. That is a two-way contrast,
+and drawing four configurations invites a four-way ranking the data cannot
+support, since bottleneck concatenation does not separate from the proposed scheme
+on any of twenty comparisons (Results 3.3) and the single-modality baseline does
+not separate on area (Results 3.4). Both of those comparisons are made, with their
+nulls, in Fig. 3 and Fig. 4. Here the reader sees the one contrast that does
+separate.
 
-Columns are the three configurations the argument turns on: one frame alone, the
-two frames stacked pixel-for-pixel, and the two frames fused without assuming any
-correspondence. Bottleneck concatenation is absent because the exemplar dump did
-not write its masks; it does not separate from the proposed scheme on any metric
-(Results 3.3), so nothing in the comparison shown here would change.
+Rows come from the recorded span rule, not from inspection. Across all seven
+percentiles the proposed scheme is ahead of channel concatenation on twelve of
+fourteen; the five drawn here are an evenly spaced subset of those seven, chosen
+before the scores were looked at.
 
-Every mask is a held-out prediction from the fold that excluded its patient.
+Every mask is a held-out prediction from the fold that excluded its patient, and
+the Dice printed is the mean over the three training seeds, matching how every
+other number in the paper is read.
 
 Data: results/exemplars/ (predicted masks + index.csv), data/packaged/*.npz and
       manifest.csv. No GPU, no checkpoints.
@@ -31,7 +38,7 @@ Palette discipline (shared with fig1_misalignment, fig2_fusion_operator)
   Blue / teal -> reference frame identity ONLY, carried on the panel border.
   Gold        -> the reference contour, as in fig1_misalignment. Red is not
                  usable here: it disappears against white-light mucosa.
-  Grey        -> a configuration that is not the proposed one.
+  Grey        -> channel concatenation, which is not the proposed scheme.
 """
 import os
 import sys
@@ -63,29 +70,21 @@ OUT = os.path.dirname(os.path.abspath(__file__))
 
 C_WLI = "#0F4D92"
 C_NBI = "#42949E"
-C_REF = "#FFD700"       # gold: the reference contour, legible on pink and
-                        # green mucosa. Same value as fig1_misalignment.
-C_SIG = "#B64342"
-C_NEU = "#767676"
+C_REF = "#FFD700"       # gold: legible on both pink and green mucosa
+C_NEU = "#767676"       # channel concatenation
 
 MM = 1 / 25.4
-FIGW, FIGH = 180 * MM, 218 * MM
+FIGW = 180 * MM          # height is computed from the tile aspect ratios
 
-# Rule -> plain reading for the row label. The percentile is of the proposed
-# scheme's per-image Dice inside that reference frame.
-ROWS = ["span-p10", "span-p50", "span-p90"]
-ROW_LABEL = {"span-p10": "10th percentile",
-             "span-p50": "median",
-             "span-p90": "90th percentile"}
+ROWS = ["span-p10", "span-p25", "span-p50", "span-p75", "span-p90"]
+ROW_LABEL = {"span-p10": "10th", "span-p25": "25th", "span-p50": "50th",
+             "span-p75": "75th", "span-p90": "90th"}
 
 FRAMES = [
-    ("WLI", C_WLI, "wli_only", "early_fusion_wli", "white light"),
-    ("NBI", C_NBI, "nbi_only", "early_fusion_nbi", "narrow band"),
+    ("WLI", C_WLI, "early_fusion_wli", "white light"),
+    ("NBI", C_NBI, "early_fusion_nbi", "narrow band"),
 ]
-BOTTLENECK = "mid_fusion"     # drawn only when every tile has its mask
-COLS_BASE = ["Reference contour", "Single modality",
-             "Channel concatenation", "Proposed"]
-COL_BOTTLENECK = "Bottleneck concatenation"
+COLS = ["Reference", "Channel concat.", "Proposed"]
 
 
 def outline(mask, width=2):
@@ -103,7 +102,6 @@ def outline(mask, width=2):
 
 
 def draw(ax, img, contours):
-    """One tile: the frame with zero or more coloured contours over it."""
     ax.imshow(img)
     for mask, colour in contours:
         ov = np.zeros(img.shape[:2] + (4,), float)
@@ -112,7 +110,15 @@ def draw(ax, img, contours):
     ax.set_xticks([]); ax.set_yticks([])
 
 
-def main():
+def dice_of(row):
+    """Seed mean where recorded, else the rendered seed."""
+    d = row["dice_seed_mean"]
+    if d in ("", None) or (isinstance(d, float) and d != d):
+        return float(row["dice_this_seed"])
+    return float(d)
+
+
+def main() -> int:
     for p in (os.path.join(EXEMPLARS, "index.csv"), MANIFEST, NPZ):
         if not os.path.isfile(p):
             raise SystemExit("missing input: %s" % p)
@@ -127,28 +133,36 @@ def main():
     blob = np.load(NPZ)
     images, masks = blob["images"], blob["masks"]
 
-    # The bottleneck column is optional: scripts/dump_fig5_midfusion.py adds
-    # its masks later, and until every tile has one the column is left out
-    # rather than drawn half empty.
-    tiles = [(f[0], r) for f in FRAMES for r in ROWS]
-    have_bn = all(
-        not idx[(idx.ref_modality == fr) & (idx.rule == rule)
-                & (idx.config == BOTTLENECK)].empty
-        for fr, rule in tiles)
-    cols = (COLS_BASE[:3] + [COL_BOTTLENECK] + COLS_BASE[3:]
-            if have_bn else COLS_BASE)
-    print("bottleneck column: %s" % ("drawn" if have_bn else
-                                     "absent, masks not dumped yet"))
+    # Measure first: the two frames differ in aspect ratio, so equal-height rows
+    # would leave a white band under every wide tile.
+    def tile_shape(frame, rule):
+        sub = idx[(idx.ref_modality == frame) & (idx.rule == rule)]
+        if sub.empty:
+            return None
+        key = (sub.iloc[0]["case"], sub.iloc[0]["scale"], frame)
+        if key not in crop_of:
+            return None
+        y0, y1, x0, x1 = crop_of[key]
+        return (y1 - y0) / (x1 - x0)
 
-    fig = plt.figure(figsize=(FIGW, FIGH))
-    gs = GridSpec(len(FRAMES) * len(ROWS), len(cols), figure=fig,
-                  left=0.085, right=0.995, top=0.962, bottom=0.048,
-                  hspace=0.05, wspace=0.03)
+    heights = []
+    for rule in ROWS:
+        hs = [tile_shape(f[0], rule) for f in FRAMES]
+        heights.append(max([h for h in hs if h] or [1.0]))
 
-    missing = []
-    for fi, (frame, colour, single, early, frame_word) in enumerate(FRAMES):
+    # One tile is 1 unit wide; a row is as tall as its tallest tile.
+    tile_w = (1.0 - 0.062 - 0.005) / (3 + 0.28 / 3 + 3)
+    fig_h = FIGW * (sum(heights) * tile_w + 0.11) + 0.02
+    fig = plt.figure(figsize=(FIGW, fig_h))
+    gs = GridSpec(len(ROWS), 7, figure=fig,
+                  width_ratios=[1, 1, 1, 0.28, 1, 1, 1],
+                  height_ratios=heights,
+                  left=0.062, right=0.995, top=0.918, bottom=0.012,
+                  hspace=0.06, wspace=0.035)
+
+    missing, ahead = [], []
+    for fi, (frame, colour, early, frame_word) in enumerate(FRAMES):
         for ri, rule in enumerate(ROWS):
-            r = fi * len(ROWS) + ri
             sub = idx[(idx.ref_modality == frame) & (idx.rule == rule)]
             if sub.empty:
                 missing.append("%s %s" % (frame, rule)); continue
@@ -160,10 +174,9 @@ def main():
             img = images[row_of[key]][y0:y1, x0:x1]
             gt = masks[row_of[key]][y0:y1, x0:x1] > 127
 
-            chain = ([None, single, early, BOTTLENECK, "ours"] if have_bn
-                     else [None, single, early, "ours"])
-            for ci, cfg in enumerate(chain):
-                ax = fig.add_subplot(gs[r, ci])
+            scores = {}
+            for ci, cfg in enumerate([None, early, "ours"]):
+                ax = fig.add_subplot(gs[ri, fi * 4 + ci])
                 if cfg is None:
                     draw(ax, img, [(gt, C_REF)])
                 else:
@@ -177,28 +190,32 @@ def main():
                     pred = (np.array(Image.open(path)) > 0)[y0:y1, x0:x1]
                     pen = colour if cfg == "ours" else C_NEU
                     draw(ax, img, [(gt, C_REF), (pred, pen)])
-                    row = hit.iloc[0]
-                    d = row["dice_seed_mean"]
-                    d = float(row["dice_this_seed"] if d in ("", None)
-                              or (isinstance(d, float) and d != d) else d)
-                    ax.text(0.035, 0.035, "Dice %.2f" % d, transform=ax.transAxes,
-                            ha="left", va="bottom", fontsize=6.6, color="white",
+                    d = dice_of(hit.iloc[0])
+                    scores[cfg] = d
+                    ax.text(0.045, 0.045, "%.2f" % d, transform=ax.transAxes,
+                            ha="left", va="bottom", fontsize=6.8, color="white",
                             fontweight="bold",
-                            bbox=dict(boxstyle="round,pad=0.22", fc=pen,
-                                      ec="none", alpha=0.88))
+                            bbox=dict(boxstyle="round,pad=0.20", fc=pen,
+                                      ec="none", alpha=0.90))
                 for s in ax.spines.values():
-                    s.set_edgecolor(colour); s.set_linewidth(1.0)
-                if r == 0:
-                    ax.set_title(cols[ci], fontsize=7.4, pad=4.0,
-                                 color="black" if ci else "#8A6D00")
-                if ci == 0:
-                    ax.text(-0.055, 0.5, ROW_LABEL[rule], transform=ax.transAxes,
-                            rotation=90, ha="right", va="center", fontsize=7.0,
+                    s.set_edgecolor(colour); s.set_linewidth(0.9)
+                if ri == 0:
+                    ax.set_title(COLS[ci], fontsize=7.0, pad=3.5,
+                                 color="#8A6D00" if ci == 0 else
+                                 (colour if ci == 2 else C_NEU))
+                if ci == 0 and fi == 0:
+                    ax.text(-0.085, 0.5, ROW_LABEL[rule], transform=ax.transAxes,
+                            rotation=90, ha="right", va="center", fontsize=7.2,
                             color=C_NEU)
-        # one frame label per block, on the left margin
-        y_top = 1 - 0.038 - fi * 0.4570
-        fig.text(0.017, y_top - 0.2, frame_word, rotation=90, ha="center",
-                 va="center", fontsize=9.2, color=colour, fontweight="bold")
+            if len(scores) == 2:
+                ahead.append(scores["ours"] > scores[early])
+
+        mid = 0.062 + (0.995 - 0.062) * (0.185 + fi * 0.545)
+        fig.text(mid, 0.962, frame_word, ha="center", va="bottom",
+                 fontsize=9.2, color=colour, fontweight="bold")
+
+    fig.text(0.012, 0.47, "percentile of per-image Dice", rotation=90,
+             ha="center", va="center", fontsize=7.4, color=C_NEU)
 
     base = os.path.join(OUT, "fig_qualitative_span")
     for ext, kw in [(".svg", {}), (".pdf", {}), (".tiff", dict(dpi=600)),
@@ -206,6 +223,8 @@ def main():
         fig.savefig(base + ext, **kw)
     if missing:
         print("!!! %d tile(s) missing: %s" % (len(missing), ", ".join(missing)))
+    print("proposed ahead of channel concatenation in %d of %d drawn rows"
+          % (sum(ahead), len(ahead)))
     print("saved -> fig_qualitative_span.{svg,pdf,tiff,png}")
     return 1 if missing else 0
 
