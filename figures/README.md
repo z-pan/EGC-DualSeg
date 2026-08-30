@@ -24,16 +24,19 @@ python scripts/make_supplementary.py
 | `fig2_fusion_operator.py` | Fig. 3, fusion scheme comparison | yes |
 | `fig3_dual_vs_single.py` | Fig. 4, dual versus single modality | yes |
 | `fig5_pathology.py` | Fig. 5, resection-pathology endpoints | yes |
+| `fig_qualitative_span.py` | Fig. 6, delineations across the range | **no** — needs the image archive |
 | `fig2_resolution.py` | Fig. S1, effective resolution | **no** — needs the image archive |
 | `figS2_mmd_sweep.py` | Fig. S2, distribution-alignment sweep | yes |
 | `fig6_correspondence.py` | Fig. S3, gain against correspondence | yes |
 | `graphical_abstract.py` | Graphical abstract | yes |
 | `../scripts/make_supplementary.py` | Table 1, Tables S1–S3 | yes |
 
-Seven of the ten reproduce end to end from what is committed here. The three
+Seven of the eleven reproduce end to end from what is committed here. The four
 that do not are the ones that display endoscopic frames: the exemplar pairs in
-Fig. 2a, the pipeline schematic in Fig. 1, and the scale-calibrated views in
-Fig. S1.
+Fig. 2a, the pipeline schematic in Fig. 1, the scale-calibrated views in
+Fig. S1, and the qualitative grid in Fig. 6. The predicted masks Fig. 6 draws
+*are* committed, under `results/exemplars/`; they are binary masks and carry no
+image data. Only the frames they are drawn over live in the archive.
 
 ## The images are not in this repository
 

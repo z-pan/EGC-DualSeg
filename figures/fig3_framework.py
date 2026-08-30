@@ -71,14 +71,38 @@ DEMO_CASE = "\u75c5\u4f8b15"          # median-correspondence exemplar, single l
 
 
 # ---------- schematic helpers ---------------------------------------------
+_BOXES = []                      # (ax, x, y, w, h, text_artist) for the fit check
+
+
 def box(ax, x, y, w, h, text, fc=C_BOX, ec=C_DARK, tc="black", fs=8.2,
         lw=1.0, weight="normal"):
     ax.add_patch(FancyBboxPatch((x, y), w, h,
                                 boxstyle="round,pad=0.004,rounding_size=0.012",
                                 fc=fc, ec=ec, lw=lw, zorder=2))
-    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center",
-            fontsize=fs, color=tc, zorder=3, linespacing=1.30,
-            fontweight=weight)
+    t = ax.text(x + w / 2, y + h / 2, text, ha="center", va="center",
+                fontsize=fs, color=tc, zorder=3, linespacing=1.30,
+                fontweight=weight)
+    _BOXES.append((ax, x, y, w, h, t))
+
+
+def check_boxes(fig, margin=0.004):
+    """Re-measure every label after the draw; overflow is a layout bug, not a
+    styling preference, so say so loudly rather than shipping a clipped figure."""
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    bad = []
+    for ax, x, y, w, h, t in _BOXES:
+        bb = t.get_window_extent(renderer=r).transformed(ax.transAxes.inverted())
+        if bb.width > w - margin or bb.height > h - margin:
+            bad.append((t.get_text().replace("\n", "|"), w, bb.width, h, bb.height))
+    if bad:
+        print("\n!!! %d BOX(ES) TOO SMALL FOR THEIR LABEL:" % len(bad))
+        for s, w, tw, h, th in bad:
+            print("    %-34s box %.3f x %.3f   text %.3f x %.3f" % (s[:34], w, h, tw, th))
+        print("!!! enlarge the box or rewrap the label; do not reduce the font.\n")
+    else:
+        print("box fit check: all %d labels fit" % len(_BOXES))
+    return len(bad)
 
 
 def arrow(ax, x0, y0, x1, y1, color=C_DARK, ls="solid", lw=1.1, rad=0.0):
@@ -177,26 +201,24 @@ box(axa, 0.048, 0.545, 0.088, 0.150, "WLI\nframe", fc="white", ec=C_WLI,
     tc=C_WLI, lw=1.3, weight="bold")
 box(axa, 0.048, 0.245, 0.088, 0.150, "NBI\nframe", fc="white", ec=C_NBI,
     tc=C_NBI, lw=1.3, weight="bold")
-box(axa, 0.165, 0.395, 0.088, 0.150, "crop to\nendoscopic\nfield", fs=7.6)
-box(axa, 0.278, 0.395, 0.098, 0.150, "shared\nbackbone\n+ modality\nadapter", fs=7.4)
-box(axa, 0.400, 0.395, 0.082, 0.150, "scale\nnormali-\nsation", fs=7.6)
-box(axa, 0.505, 0.360, 0.098, 0.220, "cross-\nattention\n\nref = Q\naux = K/V", fs=7.4)
-box(axa, 0.048, 0.130, 0.150, 0.105, "reference-role\nembedding",
+box(axa, 0.163, 0.378, 0.100, 0.185, "crop to\nendoscopic\nfield", fs=7.6)
+box(axa, 0.278, 0.354, 0.098, 0.232, "shared\nbackbone\n+ modality\nadapter", fs=7.4)
+box(axa, 0.398, 0.378, 0.088, 0.185, "scale\nnormali-\nsation", fs=7.6)
+box(axa, 0.505, 0.328, 0.098, 0.285, "cross-\nattention\n\nref = Q\naux = K/V", fs=7.4)
+box(axa, 0.048, 0.098, 0.150, 0.128, "reference-role\nembedding",
     fc="white", ec=C_NEU, tc=C_NEU, fs=7.2)
-axa.text(0.052, 0.108, "either modality may serve as the reference",
-         fontsize=7.0, color=C_NEU, va="center", style="italic")
-box(axa, 0.690, 0.545, 0.105, 0.150, "decoder\nto lesion mask", fs=7.6)
+box(axa, 0.690, 0.545, 0.105, 0.150, "decoder to\nlesion mask", fs=7.6)
 box(axa, 0.690, 0.245, 0.105, 0.150, "grade head", fs=7.8)
-box(axa, 0.845, 0.245, 0.125, 0.150, "low grade\nvs\nhigh grade+",
+box(axa, 0.845, 0.225, 0.125, 0.190, "low grade\nvs\nhigh grade+",
     fc="white", ec=C_GRN, tc=C_GRN, fs=7.8, lw=1.3, weight="bold")
 
 arrow(axa, 0.136, 0.620, 0.163, 0.525)
 arrow(axa, 0.136, 0.320, 0.163, 0.415)
-arrow(axa, 0.253, 0.470, 0.276, 0.470)
+arrow(axa, 0.265, 0.470, 0.276, 0.470)
 arrow(axa, 0.376, 0.470, 0.398, 0.470)
-arrow(axa, 0.482, 0.470, 0.503, 0.470)
+arrow(axa, 0.488, 0.470, 0.503, 0.470)
 arrow(axa, 0.603, 0.470, 0.688, 0.620, rad=-0.12)
-arrow(axa, 0.198, 0.182, 0.505, 0.362, color=C_NEU, ls=(0, (3, 2)), lw=0.9, rad=-0.14)
+arrow(axa, 0.200, 0.162, 0.505, 0.352, color=C_NEU, ls=(0, (3, 2)), lw=0.9, rad=-0.14)
 arrow(axa, 0.742, 0.545, 0.742, 0.398)
 arrow(axa, 0.795, 0.320, 0.843, 0.320)
 axa.text(0.752, 0.470, "lesion region", fontsize=7.2, color=C_NEU,
@@ -261,19 +283,21 @@ axc.text(0.190, 0.442, "Stage 1", fontsize=8.0, color=C_DARK,
          fontweight="bold", ha="center", va="bottom")
 axc.text(0.700, 0.442, "Stage 2", fontsize=8.0, color=C_DARK,
          fontweight="bold", ha="center", va="bottom")
-box(axc, 0.020, 0.265, 0.340, 0.165,
+box(axc, 0.000, 0.265, 0.380, 0.165,
     "150 same-view pairs\n77 near / 73 distant\n77 patients",
     fc=C_S1, ec=C_DARK, fs=7.3)
-box(axc, 0.530, 0.265, 0.340, 0.165,
+box(axc, 0.510, 0.265, 0.390, 0.165,
     "48 gradeable resections\n21 low / 27 high+\n48 patients",
     fc=C_S2, ec=C_DARK, fs=7.3)
 arrow(axc, 0.700, 0.263, 0.700, 0.202, color=C_NEU)
-box(axc, 0.530, 0.100, 0.340, 0.102,
+box(axc, 0.505, 0.100, 0.400, 0.115,
     "positive control\n45 with macroscopic type",
     fc="white", ec=C_NEU, tc=C_NEU, fs=7.0)
 axc.text(0.020, 0.210,
          "10 multifocal patients; the 4\nwith a separate measurement\nper lesion are excluded from\nthe extent analysis, 2 retained",
          fontsize=6.9, color=C_SIG, va="top", linespacing=1.32)
+
+check_boxes(fig)
 
 base = os.path.join(OUT, "fig3_framework")
 fig.savefig(base + ".svg")
